@@ -96,10 +96,10 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 
 | Command | Mark | Reason |
 | --- | --- | --- |
-| `insert_newline` | adapt | Leave Enter to Obsidian. It continues lists and quotes. |
-| `smart_tab` | adapt | Whitespace to the left: leave Tab to Obsidian (list indent). Else no tree-sitter jump, so it inserts a tab. |
+| `insert_newline` | port | Option. Default leaves Enter to Obsidian (continues lists and quotes). |
+| `smart_tab` | port | Option. Default leaves Tab to Obsidian (list indent, table cells). |
 | `insert_tab` | port | Trivial. |
-| `delete_char_backward` | adapt | Leave Backspace to Obsidian (pair delete, list markers). |
+| `delete_char_backward` | port | Option. Default leaves Backspace to Obsidian (list markers). |
 | `delete_char_forward`, `delete_word_backward`, `delete_word_forward`, `kill_to_line_start`, `kill_to_line_end` | port | Pure text. |
 | `insert_char_interactive`, `append_char_interactive` | port | Trivial. |
 | `insert_register` | port | Registers. |
@@ -278,8 +278,8 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 | `color-modes` | adapt | Mode colour in the status item. |
 | `statusline.*` | adapt | Elements we can fill: `mode`, `file-name`, `file-base-name`, `file-absolute-path`, `file-modification-indicator`, `position`, `position-percentage`, `total-line-numbers`, `selections`, `primary-selection-length`, `register`, `separator`, `spacer`, `mode.*` texts. Others render empty. |
 | `auto-info` | adapt | Which-key panel. |
-| `auto-pairs` | adapt | See open question 2. |
-| `smart-tab.*` | adapt | See `smart_tab`. |
+| `auto-pairs` | port | `auto_pairs.rs`, full. Plugin option picks Helix's (default) or Obsidian's. With Helix's on, Obsidian's auto-pair settings are bypassed. |
+| `smart-tab.*` | port | Applies when the Helix insert-keys option is on. |
 | `line-number` | adapt | `relative` via CM6 `lineNumbers({formatNumber})`, only when Obsidian's line numbers are on. |
 | `cursorline` | adapt | CM6 `highlightActiveLine`. |
 | `whitespace.render` | adapt | CM6 `highlightWhitespace`, partial. |
@@ -301,10 +301,19 @@ Kote's own config after stripping: everything except the `:sh ~/.config/helix/in
 
 Obsidian's editor parser is most likely a flat token stream (HyperMD-based), not a nested tree. Check this in step 3. If it is flat, `expand_selection` and friends need our own markdown tree: section by heading, list, list item, paragraph, line, word. That is a design talk, so they are marked **later**.
 
-## Open questions for Kote
+## Plugin options
 
-1. **Selection model in Live Preview.** Decided: Live Preview shows the markup inside every Helix selection, so the block cursor never jumps over hidden `**`.
-2. **Auto-pairs.** Obsidian has its own "Auto-pair brackets" and "Auto-pair Markdown syntax" settings. Port Helix `auto_pairs.rs` and turn Obsidian's off, or keep Obsidian's and ignore `[editor.auto-pairs]`?
-3. **`o` / `O` in lists.** Decided: continue list markers.
-4. **Insert-mode keys.** I mark Enter, Tab and Backspace as "leave to Obsidian". Agree?
-5. **Markdown text objects.** Add extra `mi`/`ma` keys for markdown (link, heading section, list item, code block)? Not in Helix, so off by default.
+Options that Helix does not have. They live in the plugin's settings tab, not in `config.toml`.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| Auto-pairs | Helix | Helix: `auto_pairs.rs` and `[editor.auto-pairs]`. Obsidian: Obsidian's own auto-pair settings. |
+| Insert keys (Enter, Tab, Backspace) | Obsidian | Obsidian: list continuation, list indent, table cells. Helix: `insert_newline`, `smart_tab`, `delete_char_backward` ports. |
+
+## Decisions
+
+1. Live Preview shows the markup inside every Helix selection in normal and select mode.
+2. Auto-pairs: both, as an option (above).
+3. `o` and `O` continue list markers.
+4. Insert keys: both, as an option (above).
+5. No text objects beyond Helix's. If Helix does not have it, we do not have it.
