@@ -71,7 +71,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `switch_case`, `switch_to_uppercase`, `switch_to_lowercase` | port | `case_conversion.rs`. |
 | `delete_selection`, `delete_selection_noyank`, `change_selection`, `change_selection_noyank` | port | Core. |
 | `insert_mode`, `append_mode`, `insert_at_line_start`, `insert_at_line_end` | port | Core. |
-| `open_below`, `open_above` | port | Copy indent. List markers: see open question 3. |
+| `open_below`, `open_above` | adapt | Copy indent and continue list markers (`- `, `1.`, `- [ ]`, `> `), like Obsidian's Enter. |
 | `add_newline_above`, `add_newline_below` | port | Trivial. |
 | `join_selections`, `join_selections_space` | port | Pure text. |
 | `indent`, `unindent` | port | Indent unit comes from Obsidian's tab settings. |
@@ -303,8 +303,8 @@ Obsidian's editor parser is most likely a flat token stream (HyperMD-based), not
 
 ## Open questions for Kote
 
-1. **Selection model in Live Preview.** Helix always has a 1-char selection. Live Preview hides markup when the cursor leaves it, so a block cursor on a hidden `**` jumps. Accept this, or show markup inside the selection?
+1. **Selection model in Live Preview.** Decided: Live Preview shows the markup inside every Helix selection, so the block cursor never jumps over hidden `**`.
 2. **Auto-pairs.** Obsidian has its own "Auto-pair brackets" and "Auto-pair Markdown syntax" settings. Port Helix `auto_pairs.rs` and turn Obsidian's off, or keep Obsidian's and ignore `[editor.auto-pairs]`?
-3. **`o` / `O` in lists.** Helix copies indent only. Obsidian's Enter continues `- ` and `1.`. Should `o` continue list markers too?
+3. **`o` / `O` in lists.** Decided: continue list markers.
 4. **Insert-mode keys.** I mark Enter, Tab and Backspace as "leave to Obsidian". Agree?
 5. **Markdown text objects.** Add extra `mi`/`ma` keys for markdown (link, heading section, list item, code block)? Not in Helix, so off by default.
