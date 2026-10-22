@@ -9,6 +9,7 @@ export function nextGraphemeBoundary(doc: Text, pos: number): number {
 
 export function prevGraphemeBoundary(doc: Text, pos: number): number {
   if (pos <= 0) return 0;
+  if (pos > doc.length) return doc.length;
   const line = doc.lineAt(pos);
   if (pos <= line.from) return pos - 1;
   return line.from + findClusterBreak(line.text, pos - line.from, false);

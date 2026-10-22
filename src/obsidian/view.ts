@@ -1,7 +1,10 @@
-import { Prec, RangeSetBuilder, type Extension } from "@codemirror/state";
+import { Compartment, Prec, RangeSet, RangeSetBuilder, StateField, type Extension } from "@codemirror/state";
 import {
   Decoration,
   EditorView,
+  GutterMarker,
+  highlightWhitespace,
+  lineNumberMarkers,
   ViewPlugin,
   WidgetType,
   showPanel,
@@ -17,6 +20,8 @@ import { nextGraphemeBoundary } from "../graphemes";
 import { helixField, helixOwned, historyField, setHelix, syncNativeSelection, toNative } from "../state";
 import { hookInsert, makeAutoPairs } from "../auto-pairs";
 import { changeByAndWithSelection } from "../commands/util";
+import { pasteImpl } from "../commands/edit";
+import { exitSelectMode } from "../commands/util";
 import { Context } from "../core/editor";
 
 export interface ViewEnv {
@@ -83,7 +88,7 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
     const cls = `hx-cursor hx-cursor-${shape}${primary ? " hx-cursor-primary" : ""}`;
     const line = doc.lineAt(cursor);
     if (cursor >= doc.length || cursor === line.to) {
-      builder.push({ from: cursor, to: cursor, deco: Decoration.widget({ widget: new EolCursor(cls), side: 1 }) });
+      builder.push({ from: cursor, to: cursor, deco: Decoration.widget({ widget: new EolCursor(`${cls} hx-eol`), side: 1 }) });
     } else {
       builder.push({ from: cursor, to: nextGraphemeBoundary(doc, cursor), deco: Decoration.mark({ class: cls }) });
     }
@@ -104,6 +109,63 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
     if ((d.deco.spec as { widget?: unknown }).widget && d.to > d.from) lastReplaceEnd = d.to;
   }
   return set.finish();
+}
+
+class NumberMarker extends GutterMarker {
+  constructor(readonly text: string) {
+    super();
+  }
+  override eq(other: GutterMarker): boolean {
+    return other instanceof NumberMarker && other.text === this.text;
+  }
+  override toDOM(): Node {
+    return document.createTextNode(this.text);
+  }
+}
+
+export const whitespaceCompartment = new Compartment();
+
+function relativeMarkers(state: import("@codemirror/state").EditorState): RangeSet<GutterMarker> {
+  const value = state.field(helixField, false);
+  if (!value) return RangeSet.empty;
+  const doc = state.doc;
+  const current = doc.lineAt(value.selection.primary().cursor(doc)).number;
+  const builder = new RangeSetBuilder<GutterMarker>();
+  for (let n = 1; n <= doc.lines; n++) {
+    builder.add(doc.line(n).from, doc.line(n).from, new NumberMarker(n === current ? String(n) : String(Math.abs(n - current))));
+  }
+  return builder.finish();
+}
+
+function relativeField(env: ViewEnv) {
+  const compute = (state: import("@codemirror/state").EditorState) =>
+    env.editor.config.lineNumber === "relative" ? relativeMarkers(state) : RangeSet.empty;
+  const lineOf = (state: import("@codemirror/state").EditorState) => {
+    const value = state.field(helixField, false);
+    return value ? state.doc.lineAt(value.selection.primary().cursor(state.doc)).number : 0;
+  };
+  return StateField.define<{ line: number; mode: string; markers: RangeSet<GutterMarker> }>({
+    create: (state) => ({ line: lineOf(state), mode: env.editor.config.lineNumber, markers: compute(state) }),
+    update(value, tr) {
+      const line = lineOf(tr.state);
+      const mode = env.editor.config.lineNumber;
+      if (!tr.docChanged && line === value.line && mode === value.mode) return value;
+      return { line, mode, markers: compute(tr.state) };
+    },
+    provide: (f) => lineNumberMarkers.from(f, (v) => v.markers),
+  });
+}
+
+function cursorLineDecorations(view: EditorView, env: ViewEnv): DecorationSet {
+  if (!env.editor.config.cursorline) return Decoration.none;
+  const value = view.state.field(helixField, false);
+  if (!value) return Decoration.none;
+  const doc = view.state.doc;
+  const lines = new Set<number>();
+  for (const r of value.selection.ranges) lines.add(doc.lineAt(r.cursor(doc)).from);
+  const builder = new RangeSetBuilder<Decoration>();
+  for (const from of [...lines].sort((a, b) => a - b)) builder.add(from, from, Decoration.line({ class: "hx-cursorline" }));
+  return builder.finish();
 }
 
 function literalWanted(editor: HelixEditor, mode: string): boolean {
@@ -134,7 +196,7 @@ export function helixExtension(env: ViewEnv): Extension {
         const literal = literalWanted(editor, mode);
         let key = keyFromDom(event, literal);
         if (key === null) return false;
-        if (mode === "insert" && !editor.activePrompt && editor.onNextKeyState === null) {
+        if (mode === "insert" && !editor.activePrompt && editor.onNextKeyState === null && (event.altKey || event.ctrlKey)) {
           const physical = keyFromDom(event, false);
           if (physical && physical !== key && pendingNode(editor, "insert").map.has(physical)) key = physical;
         }
@@ -199,6 +261,36 @@ export function helixExtension(env: ViewEnv): Extension {
     { decorations: (v) => v.decorations },
   );
 
+  const gutterNumbers = ViewPlugin.fromClass(
+    class {
+      lines: DecorationSet;
+      constructor(view: EditorView) {
+        this.lines = cursorLineDecorations(view, env);
+      }
+      update(update: ViewUpdate) {
+        this.lines = cursorLineDecorations(update.view, env);
+      }
+    },
+    { decorations: (v) => v.lines },
+  );
+
+  const pasteHandler = Prec.highest(
+    EditorView.domEventHandlers({
+      paste(event, view) {
+        const value = view.state.field(helixField, false);
+        if (!value || value.mode === "insert") return false;
+        const text = event.clipboardData?.getData("text/plain");
+        if (!text) return false;
+        event.preventDefault();
+        const cx = new Context(editor, env.hostFor(view), editor.count, null);
+        editor.count = null;
+        pasteImpl(cx, [text], value.mode === "normal" ? "before" : "cursor", cx.count());
+        exitSelectMode(cx);
+        return true;
+      },
+    }),
+  );
+
   const attributes = EditorView.editorAttributes.compute([helixField], (state) => {
     const value = state.field(helixField, false);
     const mode = value?.mode ?? "normal";
@@ -227,7 +319,21 @@ export function helixExtension(env: ViewEnv): Extension {
     };
   });
 
-  return [helixField, historyField, syncNativeSelection, keyHandler, autoPairsInput, decorations, attributes, scrollMargins, panel];
+  return [
+    helixField,
+    historyField,
+    syncNativeSelection,
+    keyHandler,
+    pasteHandler,
+    autoPairsInput,
+    decorations,
+    gutterNumbers,
+    relativeField(env),
+    attributes,
+    scrollMargins,
+    panel,
+    whitespaceCompartment.of(editor.config.whitespaceRender ? highlightWhitespace() : []),
+  ];
 }
 
 function renderPanel(view: EditorView, env: ViewEnv, info: HTMLElement, prompt: HTMLElement): void {
@@ -269,6 +375,7 @@ function renderPanel(view: EditorView, env: ViewEnv, info: HTMLElement, prompt: 
     const title = document.createElement("div");
     title.className = "hx-autoinfo-title";
     const rows: [string, string][] = [];
+    let unavailable = new Set<string>();
     if ("kind" in auto) {
       title.textContent = auto.name;
       const grouped = new Map<string, string[]>();
@@ -280,6 +387,11 @@ function renderPanel(view: EditorView, env: ViewEnv, info: HTMLElement, prompt: 
         grouped.set(desc, list);
       }
       for (const [desc, keys] of grouped) rows.push([keys.join(", "), desc]);
+      unavailable = new Set(
+        [...auto.map]
+          .filter(([, t]) => t.kind === "command" && t.command.kind === "static" && !editor.hasCommand(t.command.name))
+          .map(([, t]) => describe((t as { command: import("../keymap/trie").MappableCommand }).command)),
+      );
     } else {
       title.textContent = auto.title;
       rows.push(...auto.body);
@@ -287,7 +399,7 @@ function renderPanel(view: EditorView, env: ViewEnv, info: HTMLElement, prompt: 
     info.append(title);
     for (const [k, d] of rows) {
       const row = document.createElement("div");
-      row.className = "hx-autoinfo-row";
+      row.className = unavailable.has(d) ? "hx-autoinfo-row hx-autoinfo-unavailable" : "hx-autoinfo-row";
       const ks = document.createElement("span");
       ks.className = "hx-autoinfo-key";
       ks.textContent = k;

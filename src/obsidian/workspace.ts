@@ -11,6 +11,7 @@ import type { EditorView } from "@codemirror/view";
 import type { Context, Workspace } from "../core/editor";
 import type { Jump } from "../commands/jumps";
 import { setSel, docOf, selOf } from "../commands/util";
+import { pushJump } from "../commands/jumps";
 import { gotoLineWithoutJumplist } from "../commands/motion";
 import { charAt, charBefore } from "../core/text";
 
@@ -257,6 +258,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
           cx.editor.setError("no link under cursor");
           return;
         }
+        if (name === "goto_file" || name === "goto_definition") pushJump(cx);
         if (name === "goto_file_hsplit") void openTarget(cx, link.target, "split", "horizontal");
         else if (name === "goto_file_vsplit") void openTarget(cx, link.target, "split", "vertical");
         else void openTarget(cx, link.target, false);
@@ -283,14 +285,25 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
         const ev = cx.host.view;
         if (!link || !ev) return;
         const coords = ev.coordsAtPos(selOf(cx).primary().cursor(cx.host.state.doc));
-        const target = ev.contentDOM;
+        const target = document.body.createSpan({ cls: "hx-hover-anchor" });
+        target.style.position = "fixed";
+        target.style.left = `${coords?.left ?? 0}px`;
+        target.style.top = `${coords?.top ?? 0}px`;
+        target.style.width = "1px";
+        target.style.height = `${(coords?.bottom ?? 0) - (coords?.top ?? 0)}px`;
         app.workspace.trigger("hover-link", {
-          event: new MouseEvent("mouseover", { clientX: coords?.left ?? 0, clientY: coords?.bottom ?? 0 }),
+          event: new MouseEvent("mouseover", { clientX: coords?.left ?? 0, clientY: coords?.bottom ?? 0, metaKey: true, ctrlKey: true }),
           source: "editor",
-          hoverParent: view ?? target,
+          hoverParent: view ?? { hoverPopover: null },
           targetEl: target,
           linktext: link.target,
           sourcePath: fileOf(cx)?.path ?? "",
+        });
+        cx.editor.onNextKeyCleanup.push(() => {
+          const parent = (view ?? null) as unknown as { hoverPopover?: { hide(): void } | null } | null;
+          parent?.hoverPopover?.hide();
+          target.dispatchEvent(new MouseEvent("mouseout", { bubbles: true }));
+          target.remove();
         });
         return;
       }

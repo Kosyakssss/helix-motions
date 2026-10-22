@@ -105,6 +105,8 @@ export class HelixEditor {
   jumpLabels = new Map<string, JumpLabel[]>();
   commentTokens: ((host: Host, pos: number) => CommentTokens) | null = null;
   onConfigChanged: (() => void) | null = null;
+  replayKeyHook: ((host: Host, key: string) => boolean) | null = null;
+  onNextKeyCleanup: (() => void)[] = [];
   private jumplists = new Map<string, JumpList>();
 
   constructor(keymaps: Keymaps, config: Config = defaultConfig()) {
@@ -159,6 +161,10 @@ export class HelixEditor {
 
   docChanged(host: Host, changes: import("@codemirror/state").ChangeDesc): void {
     for (const list of this.jumplists.values()) list.map(host.id, changes);
+  }
+
+  resetJumplists(): void {
+    this.jumplists.clear();
   }
 
   allJumplists(): Iterable<JumpList> {
@@ -242,6 +248,11 @@ export class HelixEditor {
   }
 
   handleKey(host: Host, key: string, options: HandleKeyOptions = {}): boolean {
+    if (this.onNextKeyCleanup.length > 0) {
+      const cleanups = this.onNextKeyCleanup;
+      this.onNextKeyCleanup = [];
+      for (const fn of cleanups) fn();
+    }
     if (this.macroRecording && this.macroReplaying.length === 0) {
       this.macroRecording.keys.push(key);
     }
@@ -325,11 +336,11 @@ export class HelixEditor {
   }
 
   private insertMode(cx: Context, key: string, options: HandleKeyOptions): boolean {
+    if (options.passThrough?.(key) && this.keymaps.pending().length === 0 && !this.onNextKeyState) return false;
     const result = this.handleKeymapEvent("insert", cx, key);
     if (!result) return true;
     if (result.kind === "notFound") {
       if (this.onNextKey("fallback", cx, key)) return true;
-      if (options.passThrough?.(key)) return false;
       const ch = this.keyChar(key);
       if (ch === null || options.nativeInsert) return false;
       this.insertChar(cx, ch);
@@ -370,7 +381,10 @@ export class HelixEditor {
       const times = this.count ?? 1;
       for (let i = 0; i < times; i++) {
         executeCommand(cx, this.lastInsert.command);
-        for (const k of [...this.lastInsert.keys]) this.insertMode(cx, k, {});
+        for (const k of [...this.lastInsert.keys]) {
+          if (this.replayKeyHook?.(cx.host, k)) continue;
+          this.insertMode(cx, k, {});
+        }
       }
       this.count = null;
       return;

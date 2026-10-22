@@ -21,6 +21,12 @@ const KEYS = [
   "ms(", "md(", "mr([", "]<space>", "[<space>", ".", "i(<esc>", "i\"<esc>", "i<ret><esc>", "i<tab><esc>",
   "i<backspace><esc>", "a<backspace><esc>", "i<C-w><esc>", "i<del><esc>", "&", "<A-(>", "<A-)>",
   "s\\w+<ret>", "So<ret>", "Ko<ret>", "/o<ret>", "n", "N", "*", "<C-s>", "<C-o>", "<C-i>", "<A-.>", "<C-c>",
+  "<A-x>", "X", "%<A-s>", "s.<ret>", "S<space><ret>", "<A-K>a<ret>", "mi'", "ma[", "mi{", "mr(\"", "ms\"", "ms[", "md\"",
+  "\"ay", "\"ap", "\"aP", "\"_d", "\"bR", "I", "A", "i(x)<esc>", "a\"<esc>", "i'<esc>", "i<space><esc>", "i)<esc>",
+  "i<C-u><esc>", "i<C-k><esc>", "i<A-d><esc>", "i<A-backspace><esc>", "<A-`>", "ra", "r<ret>", "~", "vl", "vw", "vj", "vgl",
+  "vfa", "v%", "vx", "v;", "v<A-;>", "vb", "ve", "vW", "vgg", "vge", "vmiw", "vn", "vN", "4", "10",
+  "<C-a>", "5<C-x>", "\"#<C-a>", ":sort<ret>", ":sort -r<ret>", "<A-C>", "C", "2C", ",", "<A-,>", "<A-minus>", "<A-_>",
+  "Qwq", "Qiz<esc>Qq", "ifoo<esc>.", "o(<esc>", "O\"<esc>", "]p", "[p", "2]p", "gk", "gj", "<A-)>", "<A-(>",
 ];
 
 export function fuzzSuite(n: number, seed: number): Case[] {

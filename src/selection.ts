@@ -147,7 +147,14 @@ export class Selection {
   }
 
   ensureInvariants(doc: Text): Selection {
-    return this.transform((range) => range.minWidth1(doc).graphemeAligned(doc));
+    const len = doc.length;
+    return this.transform((range) => {
+      const r =
+        range.anchor > len || range.head > len || range.anchor < 0 || range.head < 0
+          ? new Range(Math.min(Math.max(range.anchor, 0), len), Math.min(Math.max(range.head, 0), len))
+          : range;
+      return r.minWidth1(doc).graphemeAligned(doc);
+    });
   }
 
   eq(other: Selection): boolean {

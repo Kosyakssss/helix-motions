@@ -6,7 +6,9 @@ import type { Host } from "./core/host";
 import { buildKeymaps } from "./keymap";
 import { loadConfig } from "./config-loader";
 import { defaultConfig, type Config } from "./config";
-import { helixExtension } from "./obsidian/view";
+import { helixExtension, whitespaceCompartment } from "./obsidian/view";
+import { highlightWhitespace, runScopeHandlers } from "@codemirror/view";
+import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
 import { makeViewOps } from "./obsidian/viewops";
 import { renderStatus } from "./obsidian/status";
@@ -14,6 +16,7 @@ import { commentTokensAt } from "./obsidian/comments";
 import { ElectronClipboard } from "./obsidian/clipboard";
 import { helixField } from "./state";
 import { Registers } from "./registers";
+import { commitHistoryNow } from "./commands/jumps";
 import { print, plain } from "./core/markup";
 import { setHelix, helixOwned, toNative } from "./state";
 
@@ -58,6 +61,23 @@ export default class HelixMotionsPlugin extends Plugin {
       render: (host) => this.refresh(host),
       promptChanged: (host) => this.refresh(host),
       jumpLabels: (host) => this.refresh(host),
+    };
+    this.helix.replayKeyHook = (host, key) => {
+      if (this.settings.insertKeys === "helix" || !host.view) return false;
+      const dom: Record<string, [string, boolean]> = {
+        ret: ["Enter", false],
+        tab: ["Tab", false],
+        "S-tab": ["Tab", true],
+        backspace: ["Backspace", false],
+        "S-backspace": ["Backspace", true],
+      };
+      const spec = dom[key];
+      if (!spec) return false;
+      const event = new KeyboardEvent("keydown", { key: spec[0], code: spec[0], shiftKey: spec[1], bubbles: true, cancelable: true });
+      if (runScopeHandlers(host.view, event, "editor")) return true;
+      if (spec[0] === "Backspace") return deleteCharBackward(host.view);
+      if (spec[0] === "Enter") return insertNewlineAndIndent(host.view);
+      return false;
     };
     await this.reloadConfig();
     this.registerEditorExtension(
@@ -118,8 +138,13 @@ export default class HelixMotionsPlugin extends Plugin {
       const view = this.api.view();
       if (!view) return null;
       const value = view.state.field(helixField);
+      const text = view.state.doc.toString();
+      const toChar = (pos: number) => [...text.slice(0, pos)].length;
       return {
-        markup: plain(view.state.doc.toString(), value.selection),
+        text,
+        ranges: value.selection.ranges.map((r) => [toChar(r.anchor), toChar(r.head)]),
+        primary: value.selection.primaryIndex,
+        markup: plain(text, value.selection),
         mode: value.mode,
         native: view.state.selection.ranges.map((r) => [r.anchor, r.head]),
         nativeMain: view.state.selection.mainIndex,
@@ -138,11 +163,29 @@ export default class HelixMotionsPlugin extends Plugin {
       const value = view.state.field(helixField);
       const next = { ...value, mode: "normal" as const, selection, restoreCursor: false };
       view.dispatch({ selection: toNative(next, view.state.doc), effects: setHelix.of(next), annotations: helixOwned.of(true) });
+      commitHistoryNow(this.hostForView(view));
+      this.helix.resetJumplists();
       this.helix.activePrompt = null;
       this.helix.onNextKeyState = null;
       this.helix.count = null;
       this.helix.keymaps.reset();
+      this.helix.macroRecording = null;
+      this.helix.macroReplaying = [];
+      this.helix.lastMotion = null;
+      this.helix.selectedRegister = null;
+      this.helix.status = null;
+      this.helix.lastInsert = { command: { kind: "static", name: "normal_mode" }, keys: [] };
+      this.helix.registers = new Registers(this.helix.registers.clipboard);
       view.focus();
+      return true;
+    },
+    useConfig: async (source: string | null) => {
+      if (source === null) await this.reloadConfig();
+      else {
+        const loaded = loadConfig(source, this.baseConfig());
+        this.helix.config = loaded.config;
+        this.helix.keymaps = buildKeymaps(loaded.keys);
+      }
       return true;
     },
     feed: (keys: string) => {
@@ -182,7 +225,16 @@ export default class HelixMotionsPlugin extends Plugin {
       console.warn("Helix Motions config warnings:\n" + loaded.warnings.join("\n"));
       new Notice(`Helix Motions: ${loaded.warnings.length} config warning(s). See the developer console.`);
     }
+    this.applyViewConfig();
     this.refreshStatus();
+  }
+
+  applyViewConfig(): void {
+    this.app.workspace.iterateAllLeaves((leaf) => {
+      if (!(leaf.view instanceof MarkdownView)) return;
+      const cm = (leaf.view.editor as unknown as { cm: EditorView }).cm;
+      cm.dispatch({ effects: whitespaceCompartment.reconfigure(this.helix.config.whitespaceRender ? highlightWhitespace() : []) });
+    });
   }
 
   hostForView(view: EditorView): Host {

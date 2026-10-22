@@ -211,7 +211,7 @@ export function deleteBySelectionInsertMode(
       let range = r;
       if (range.head > range.anchor) {
         insertNewline = insertNewline || end === doc.length;
-        range = new Range(range.anchor, range.head + 1);
+        range = new Range(range.anchor, Math.min(range.head + 1, doc.length));
       }
       ranges.push(range);
     }

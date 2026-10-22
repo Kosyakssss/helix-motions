@@ -8,13 +8,17 @@ function safe(arg: string): string {
 
 export function ob(...args: string[]): string {
   args = args.map(safe);
-  const proc = Bun.spawnSync(["obsidian", `vault=${VAULT}`, ...args], { stdout: "pipe", stderr: "pipe", timeout: 30000 });
-  return proc.stdout.toString().trim();
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const proc = Bun.spawnSync(["timeout", "-s", "KILL", "10", "obsidian", `vault=${VAULT}`, ...args], { stdout: "pipe", stderr: "pipe" });
+    const out = proc.stdout.toString().trim();
+    if (proc.exitCode === 0 || out !== "") return out;
+  }
+  throw new Error(`obsidian CLI timed out: ${args.join(" ").slice(0, 200)}`);
 }
 
 export function evalJs<T = unknown>(code: string): T {
   const out = ob("eval", `code=${code}`);
-  const m = /^=> ([\s\S]*)$/.exec(out);
+  const m = /(?:^|\n)=> ([\s\S]*)$/.exec(out);
   if (!m) throw new Error(`eval failed: ${out}`);
   const raw = m[1]!;
   try {
@@ -33,6 +37,11 @@ const SHIFTED: Record<string, [string, string]> = {
   "%": ["5", "Digit5"], "^": ["6", "Digit6"], "&": ["7", "Digit7"], "*": ["8", "Digit8"], "(": ["9", "Digit9"],
   ")": ["0", "Digit0"], _: ["-", "Minus"], "+": ["=", "Equal"], "{": ["[", "BracketLeft"], "}": ["]", "BracketRight"],
   "|": ["\\", "Backslash"], ":": [";", "Semicolon"], '"': ["'", "Quote"], "<": [",", "Comma"], ">": [".", "Period"], "?": ["/", "Slash"],
+};
+
+const VK: Record<string, number> = {
+  Backquote: 192, Minus: 189, Equal: 187, BracketLeft: 219, BracketRight: 221, Backslash: 220,
+  Semicolon: 186, Quote: 222, Comma: 188, Period: 190, Slash: 191, Space: 32,
 };
 
 const PLAIN: Record<string, string> = {
@@ -90,11 +99,11 @@ export function domKey(helixKey: string, override?: Partial<DomKey>): DomKey {
       keyCode = ch.charCodeAt(0);
     } else if (SHIFTED[ch]) {
       code = SHIFTED[ch]![1];
-      keyCode = SHIFTED[ch]![0].toUpperCase().charCodeAt(0);
+      keyCode = VK[code] ?? SHIFTED[ch]![0].charCodeAt(0);
       modifiers |= 8;
     } else if (PLAIN[ch]) {
       code = PLAIN[ch]!;
-      keyCode = ch === " " ? 32 : 0;
+      keyCode = VK[code] ?? 0;
     } else {
       code = "";
       keyCode = 0;
@@ -158,5 +167,7 @@ export function state(): AppState {
 }
 
 export function openScratch(): void {
+  ob("dev:cdp", "method=Emulation.setFocusEmulationEnabled", 'params={"enabled":true}');
+  ob("dev:cdp", "method=Page.setWebLifecycleState", 'params={"state":"active"}');
   ob("open", "path=scratch.md");
 }
