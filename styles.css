@@ -1,0 +1,145 @@
+.hx.hx-normal .cm-content,
+.hx.hx-select .cm-content {
+  caret-color: transparent;
+}
+
+.hx.hx-normal .cm-cursorLayer,
+.hx.hx-select .cm-cursorLayer,
+.hx.hx-insert.hx-shape-block .cm-cursorLayer,
+.hx.hx-insert.hx-shape-underline .cm-cursorLayer,
+.hx.hx-insert.hx-shape-hidden .cm-cursorLayer {
+  display: none;
+}
+
+.hx.hx-normal .cm-selectionLayer,
+.hx.hx-select .cm-selectionLayer {
+  display: none;
+}
+
+.hx.hx-normal .cm-line ::selection,
+.hx.hx-normal .cm-line::selection,
+.hx.hx-select .cm-line ::selection,
+.hx.hx-select .cm-line::selection {
+  background: transparent;
+}
+
+.hx .hx-sel {
+  background-color: var(--text-selection);
+}
+
+.hx .hx-sel-primary {
+  background-color: color-mix(in srgb, var(--text-selection) 100%, var(--interactive-accent) 15%);
+}
+
+.hx .hx-cursor-block {
+  background-color: color-mix(in srgb, var(--text-normal) 45%, transparent);
+  color: var(--background-primary);
+  border-radius: 1px;
+}
+
+.hx .hx-cursor-block.hx-cursor-primary {
+  background-color: var(--text-normal);
+}
+
+.hx .hx-cursor-underline {
+  box-shadow: inset 0 -2px 0 var(--text-normal);
+}
+
+.hx .hx-cursor-bar {
+  box-shadow: inset 2px 0 0 var(--text-normal);
+}
+
+.hx .hx-cursor-hidden {
+  background: none;
+}
+
+.hx span.hx-cursor {
+  white-space: pre;
+}
+
+.hx .hx-jump-label {
+  color: var(--text-error);
+  font-weight: 600;
+}
+
+.hx-panel {
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+  background: var(--background-secondary);
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+.hx-panel:has(> .hx-autoinfo[style*="none"]):has(> .hx-prompt[style*="none"]) {
+  border-top: none;
+}
+
+.hx-autoinfo {
+  padding: 4px 10px;
+  max-height: 40vh;
+  overflow: auto;
+  columns: 2 18em;
+}
+
+.hx-autoinfo-title {
+  font-weight: 600;
+  column-span: all;
+  margin-bottom: 2px;
+}
+
+.hx-autoinfo-key {
+  display: inline-block;
+  min-width: 6em;
+  color: var(--text-accent);
+}
+
+.hx-prompt {
+  padding: 3px 10px;
+  white-space: pre;
+}
+
+.hx-prompt-label {
+  color: var(--text-muted);
+  margin-right: 0.25em;
+}
+
+.hx-prompt-cursor {
+  background: var(--text-normal);
+  color: var(--background-primary);
+}
+
+.hx-completions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 1.5em;
+  padding-bottom: 3px;
+  color: var(--text-muted);
+}
+
+.hx-completion-selected {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+
+.hx-status span + span {
+  margin-left: 0.6em;
+}
+
+.hx-status-mode {
+  font-weight: 600;
+}
+
+.hx-status-mode.hx-color.hx-status-insert {
+  color: var(--color-green);
+}
+
+.hx-status-mode.hx-color.hx-status-select {
+  color: var(--color-orange);
+}
+
+.hx-status-mode.hx-color.hx-status-normal {
+  color: var(--color-blue);
+}
+
+.hx-status-error {
+  color: var(--text-error);
+}

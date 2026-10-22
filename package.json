@@ -1,0 +1,22 @@
+{
+  "name": "helix-motions",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "bun build.ts",
+    "dev": "bun build.ts --watch",
+    "check": "tsc --noEmit -p .",
+    "test": "bun test",
+    "diff": "bun test/oracle/diff.ts"
+  },
+  "devDependencies": {
+    "@codemirror/commands": "^6",
+    "@codemirror/state": "^6",
+    "@codemirror/view": "^6",
+    "@types/bun": "latest",
+    "@types/node": "^26",
+    "obsidian": "^1.14.4",
+    "smol-toml": "^1.9.1",
+    "typescript": "^7"
+  }
+}

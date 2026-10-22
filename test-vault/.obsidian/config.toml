@@ -1,0 +1,42 @@
+[editor]
+scrolloff = 4
+scroll-lines = 1
+line-number = "relative"
+cursorline = false
+trim-final-newlines = true
+trim-trailing-whitespace = true
+mouse-yank-register = "+"
+default-yank-register = "+"
+color-modes = true
+
+[editor.statusline]
+left = ["mode", "spinner", "file-base-name", "file-modification-indicator"]
+center = []
+right = ["diagnostics", "position", "total-line-numbers"]
+separator = "|"
+
+[editor.cursor-shape]
+normal = "block"
+insert = "bar"
+select = "block"
+
+[keys.normal]
+tab = ":bn"
+S-tab = ":bp"
+"}" = "goto_next_paragraph"
+"{" = "goto_prev_paragraph"
+C-r = ":reload"
+w = "@miw"
+W = "@miW"
+
+[keys.normal.space]
+w = ":write"
+q = ":quit"
+tab = ":bc"
+
+[keys.select]
+"}" = "goto_next_paragraph"
+"{" = "goto_prev_paragraph"
+
+[keys.insert]
+j = { k = "normal_mode" }
