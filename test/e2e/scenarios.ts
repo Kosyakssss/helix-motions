@@ -384,6 +384,48 @@ const checks: Check[] = [
     },
   },
   {
+    name: "j moves by visual row on a wrapped line, gj by logical line",
+    run: () => {
+      const long = Array.from({ length: 60 }, (_, i) => `word${i}`).join(" ");
+      setDoc(`#[w|]#${long.slice(1)}\nnext line\n`);
+      keys("j");
+      const afterJ = api<{ text: string; ranges: [number, number][] }>("a.state()");
+      expectTrue("still on first logical line", afterJ.ranges[0]![0] > 0 && afterJ.ranges[0]![0] < long.length, JSON.stringify(afterJ.ranges));
+      setDoc(`#[w|]#${long.slice(1)}\nnext line\n`);
+      keys("gj");
+      const afterGj = api<{ ranges: [number, number][] }>("a.state()");
+      expectEq("gj lands on next line", afterGj.ranges[0]![0], long.length + 1);
+    },
+  },
+  {
+    name: "C-d and C-u scroll half a page and move the cursor",
+    run: () => {
+      setDoc("#[l|]#" + Array.from({ length: 300 }, (_, i) => `line ${i}`).join("\n").slice(1) + "\n");
+      keys("<C-d>");
+      const down = api<{ ranges: [number, number][] }>("a.state()").ranges[0]![0];
+      const top = dom("return v.scrollDOM.scrollTop") as number;
+      expectTrue("cursor moved down", down > 50, String(down));
+      expectTrue("view scrolled", top > 0, String(top));
+      keys("<C-u>");
+      const up = api<{ ranges: [number, number][] }>("a.state()").ranges[0]![0];
+      expectTrue("cursor moved back up", up < down, `${up} < ${down}`);
+    },
+  },
+  {
+    name: "zz centers and gt/gb go to window top and bottom",
+    run: () => {
+      setDoc("#[l|]#" + Array.from({ length: 300 }, (_, i) => `line ${i}`).join("\n").slice(1) + "\n");
+      keys("150Gzz");
+      Bun.sleepSync(200);
+      const line = (pos: number) => dom(`return v.state.doc.lineAt(${pos}).number`) as number;
+      keys("gt");
+      const topLine = line(api<{ text: string; ranges: [number, number][] }>("a.state()").ranges[0]![0]);
+      keys("gb");
+      const bottomLine = line(api<{ text: string; ranges: [number, number][] }>("a.state()").ranges[0]![0]);
+      expectTrue("top above 150 and bottom below", topLine < 150 && bottomLine > 150, `${topLine} ${bottomLine}`);
+    },
+  },
+  {
     name: "unsupported Helix commands report status instead of crashing",
     run: () => {
       setDoc("#[x|]#\n");

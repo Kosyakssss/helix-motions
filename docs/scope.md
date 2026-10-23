@@ -317,3 +317,15 @@ Options that Helix does not have. They live in the plugin's settings tab, not in
 3. `o` and `O` continue list markers.
 4. Insert keys: both, as an option (above).
 5. No text objects beyond Helix's. If Helix does not have it, we do not have it.
+
+## Status
+
+Steps 2 to 6 are implemented.
+
+Known gaps:
+
+- Commands marked **later** (syntax tree, `:tutor`) show "not available".
+- In insert mode, Live Preview shows markup only around the caret. Typing replaces a non-empty native selection, so the native selection must be a caret there.
+- `Cmd-Z` is Obsidian's own undo. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
+- The `+` register uses Electron's renderer clipboard. Electron marks it deprecated.
+- On a 20,000-line note one key costs about one Obsidian transaction (~25 ms on an M1 Air).
