@@ -372,6 +372,18 @@ const checks: Check[] = [
     },
   },
   {
+    name: ":open completes vault paths with Tab",
+    run: () => {
+      setDoc("#[x|]#\n");
+      const path = () => evalJs<string>("JSON.stringify(app.workspace.getActiveFile()?.path)");
+      keys(":o notes/Se<tab><ret>");
+      for (let i = 0; i < 20 && path() !== "notes/Second.md"; i++) Bun.sleepSync(100);
+      const got = path();
+      openScratch();
+      expectEq("opened", got, "notes/Second.md");
+    },
+  },
+  {
     name: "unsupported Helix commands report status instead of crashing",
     run: () => {
       setDoc("#[x|]#\n");

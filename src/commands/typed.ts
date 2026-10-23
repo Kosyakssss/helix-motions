@@ -3,6 +3,7 @@ import { nextGraphemeBoundary } from "../graphemes";
 import { parseUndoKind } from "../history";
 import { Selection } from "../selection";
 import { refill } from "../core/textwrap";
+import { OPTIONS } from "../core/options";
 import { apply, changeSetOf, docOf, selOf, setSel } from "./util";
 import { earlier, later } from "./misc";
 import { yankJoinedTo, paste, replaceSelectionsWithRegister } from "./edit";
@@ -357,9 +358,25 @@ export function executeCommandLine(cx: Context, input: string, event: PromptEven
   cmd.fun(cx, parseArgs(rest, cmd), event);
 }
 
+const PATH_COMMANDS = new Set(["open", "vsplit", "hsplit", "read", "move", "move!", "write", "write!"]);
+const OPTION_COMMANDS = new Set(["set-option", "toggle-option", "get-option"]);
+
+export let pathCompleter: ((prefix: string) => string[]) | null = null;
+
+export function setPathCompleter(fn: ((prefix: string) => string[]) | null): void {
+  pathCompleter = fn;
+}
+
 export function completeCommandLine(input: string): string[] {
   const [command, rest] = splitCommandLine(input);
-  if (rest !== "" || input.endsWith(" ")) return [];
+  if (rest !== "" || input.endsWith(" ")) {
+    const cmd = TYPABLE_MAP.get(command);
+    if (!cmd) return [];
+    const last = rest.split(/\s+/).pop() ?? "";
+    if (PATH_COMMANDS.has(cmd.name) && pathCompleter) return pathCompleter(last).slice(0, 200);
+    if (OPTION_COMMANDS.has(cmd.name) && !/\s/.test(rest.trim())) return Object.keys(OPTIONS).filter((k) => k.startsWith(last)).sort();
+    return [];
+  }
   const names = new Set<string>();
   for (const cmd of TYPABLE) {
     if (cmd.name.startsWith(command)) names.add(cmd.name);

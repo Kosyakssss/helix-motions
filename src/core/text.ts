@@ -59,22 +59,37 @@ export function categorizeChar(ch: string): CharCategory {
   return "unknown";
 }
 
+const strings = new WeakMap<Text, string>();
+
+export function textString(doc: Text): string {
+  let s = strings.get(doc);
+  if (s === undefined) {
+    s = doc.toString();
+    strings.set(doc, s);
+  }
+  return s;
+}
+
 export function charAt(doc: Text, pos: number): string | null {
   if (pos < 0 || pos >= doc.length) return null;
-  const s = doc.sliceString(pos, Math.min(doc.length, pos + 2));
-  const cp = s.codePointAt(0)!;
-  return String.fromCodePoint(cp);
+  const s = textString(doc);
+  const hi = s.charCodeAt(pos);
+  if (hi >= 0xd800 && hi <= 0xdbff && pos + 1 < s.length) {
+    const lo = s.charCodeAt(pos + 1);
+    if (lo >= 0xdc00 && lo <= 0xdfff) return s.slice(pos, pos + 2);
+  }
+  return s[pos]!;
 }
 
 export function charBefore(doc: Text, pos: number): string | null {
   if (pos <= 0 || pos > doc.length) return null;
-  const s = doc.sliceString(Math.max(0, pos - 2), pos);
-  if (s.length === 2) {
-    const hi = s.charCodeAt(0);
-    const lo = s.charCodeAt(1);
-    if (hi >= 0xd800 && hi <= 0xdbff && lo >= 0xdc00 && lo <= 0xdfff) return s;
+  const s = textString(doc);
+  const lo = s.charCodeAt(pos - 1);
+  if (lo >= 0xdc00 && lo <= 0xdfff && pos >= 2) {
+    const hi = s.charCodeAt(pos - 2);
+    if (hi >= 0xd800 && hi <= 0xdbff) return s.slice(pos - 2, pos);
   }
-  return s.slice(-1);
+  return s[pos - 1]!;
 }
 
 export function nextCharPos(doc: Text, pos: number): number {

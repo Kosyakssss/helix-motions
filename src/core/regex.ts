@@ -1,4 +1,5 @@
 import type { Text } from "@codemirror/state";
+import { textString } from "./text";
 
 const WORD = "\\p{Alphabetic}\\p{M}\\p{Nd}\\p{Pc}\\p{Join_Control}";
 const SYNTAX = new Set([..."^$\\.*+?()[]{}|/"]);
@@ -167,15 +168,8 @@ export function smartCaseInsensitive(pattern: string, smartCase: boolean): boole
   return true;
 }
 
-const docStrings = new WeakMap<Text, string>();
-
 export function docString(doc: Text): string {
-  let s = docStrings.get(doc);
-  if (s === undefined) {
-    s = doc.toString();
-    docStrings.set(doc, s);
-  }
-  return s;
+  return textString(doc);
 }
 
 function nextIndex(s: string, i: number): number {

@@ -17,6 +17,7 @@ import { ElectronClipboard } from "./obsidian/clipboard";
 import { helixField } from "./state";
 import { Registers } from "./registers";
 import { commitHistoryNow } from "./commands/jumps";
+import { setPathCompleter } from "./commands/typed";
 import { print, plain } from "./core/markup";
 import { setHelix, helixOwned, toNative } from "./state";
 
@@ -79,6 +80,14 @@ export default class HelixMotionsPlugin extends Plugin {
       if (spec[0] === "Enter") return insertNewlineAndIndent(host.view);
       return false;
     };
+    setPathCompleter((prefix) => {
+      const lower = prefix.toLowerCase();
+      return this.app.vault
+        .getFiles()
+        .map((f) => (f.extension === "md" ? f.path.slice(0, -3) : f.path))
+        .filter((p) => p.toLowerCase().startsWith(lower) || (lower !== "" && p.toLowerCase().includes(lower)))
+        .sort((a, b) => Number(!a.toLowerCase().startsWith(lower)) - Number(!b.toLowerCase().startsWith(lower)) || a.localeCompare(b));
+    });
     await this.reloadConfig();
     this.registerEditorExtension(
       helixExtension({
@@ -290,8 +299,20 @@ export default class HelixMotionsPlugin extends Plugin {
     return !!suggest?.currentSuggest;
   }
 
+  private uiSignature = "";
+
   refresh(host: Host): void {
-    host.view?.dispatch({});
+    const p = this.helix.activePrompt;
+    const auto = this.helix.autoinfo;
+    const sig = JSON.stringify([
+      p ? [p.label, p.line, p.cursor, p.selection, p.completions.length] : null,
+      auto ? ("kind" in auto ? auto.name : auto.title) : null,
+      this.helix.jumpLabels.get(host.id)?.length ?? 0,
+    ]);
+    if (sig !== this.uiSignature) {
+      this.uiSignature = sig;
+      host.view?.dispatch({});
+    }
     this.refreshStatus();
   }
 

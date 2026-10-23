@@ -74,12 +74,16 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
   const doc = state.doc;
   const builder: { from: number; to: number; deco: Decoration }[] = [];
   const shape = env.editor.config.cursorShape[value.mode];
+  const visible = view.visibleRanges;
+  const vFrom = visible.length > 0 ? visible[0]!.from : 0;
+  const vTo = visible.length > 0 ? visible[visible.length - 1]!.to : doc.length;
   value.selection.ranges.forEach((range, i) => {
+    if (range.to() < vFrom || range.from() > vTo) return;
     const primary = i === value.selection.primaryIndex;
     if (range.to() > range.from()) {
       builder.push({
-        from: range.from(),
-        to: range.to(),
+        from: Math.max(range.from(), vFrom),
+        to: Math.min(range.to(), vTo),
         deco: Decoration.mark({ class: primary ? "hx-sel hx-sel-primary" : "hx-sel" }),
       });
     }
@@ -253,7 +257,9 @@ export function helixExtension(env: ViewEnv): Extension {
       }
       update(update: ViewUpdate) {
         if (update.docChanged) env.onChanges(update.view, update.changes);
-        this.decorations = buildDecorations(update.view, env);
+        if (update.docChanged || update.selectionSet || update.viewportChanged || update.transactions.length > 0) {
+          this.decorations = buildDecorations(update.view, env);
+        }
         if (update.focusChanged && update.view.hasFocus) env.onFocusChange(update.view);
         if (update.transactions.length > 0 || update.focusChanged) env.onRender(update.view);
       }
