@@ -2,7 +2,7 @@
   "id": "helix-motions",
   "name": "Helix Motions",
   "version": "0.1.0",
-  "minAppVersion": "1.8.0",
+  "minAppVersion": "1.13.0",
   "description": "The Helix editing model for Obsidian.",
   "author": "Kote",
   "isDesktopOnly": true

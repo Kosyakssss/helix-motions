@@ -217,7 +217,7 @@ export interface DomKeyLike {
   readonly metaKey: boolean;
 }
 
-export function keyFromDom(e: DomKeyLike, literal: boolean): string | null {
+export function keyFromDom(e: DomKeyLike, literal: boolean, physical = true): string | null {
   if (IGNORED.has(e.key)) return null;
   let code: string;
   let alt = e.altKey;
@@ -237,7 +237,7 @@ export function keyFromDom(e: DomKeyLike, literal: boolean): string | null {
     if (literal) {
       if (macOptionChar) alt = false;
       if (e.ctrlKey && nonAscii) code = physicalChar(e.code, e.shiftKey) ?? code;
-    } else if (nonAscii || macOptionChar || (e.ctrlKey && !/^[\x20-\x7e]$/.test(e.key))) {
+    } else if ((physical && nonAscii) || macOptionChar || (e.ctrlKey && !/^[\x20-\x7e]$/.test(e.key))) {
       code = physicalChar(e.code, e.shiftKey) ?? code;
     }
   } else {

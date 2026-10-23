@@ -25,6 +25,7 @@ export interface ViewEnv {
   editor: HelixEditor;
   hostFor(view: EditorView): Host;
   insertKeysHelix(): boolean;
+  physicalKeys(): boolean;
   suggestOpen(): boolean;
   onFocusChange(view: EditorView): void;
   onRender(view: EditorView): void;
@@ -195,7 +196,7 @@ export function helixExtension(env: ViewEnv): Extension {
     const dead = event.key === "Dead";
     if (dead && mode === "insert" && !editor.activePrompt) return false;
     const literal = literalWanted(editor, mode);
-    let key = keyFromDom(event, literal);
+    let key = keyFromDom(event, literal, env.physicalKeys());
     if (key === null) {
       if (!dead) return false;
       event.preventDefault();

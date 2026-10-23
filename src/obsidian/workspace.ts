@@ -22,6 +22,9 @@ interface PluginLike {
   viewFor(host: { view: EditorView | null }): MarkdownView | null;
   reloadConfig(): Promise<void>;
   configPath(): string;
+  isConfigView(view: EditorView | null): boolean;
+  saveConfigSource(text: string): Promise<void>;
+  openSettings(): void;
   lastFileByLeaf: Map<string, string[]>;
   lastModified: string[];
   writeView(view: MarkdownView): Promise<void>;
@@ -483,6 +486,10 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
         return;
       }
       case "write":
+        if (plugin.isConfigView(cx.host.view)) {
+          void plugin.saveConfigSource(cx.host.state.doc.toString()).then(() => cx.editor.setStatus("helix.toml saved"));
+          return;
+        }
         if (view) {
           if (args[0]) void app.vault.create(normalizePath(args[0]), view.editor.getValue()).catch((e: Error) => cx.editor.setError(e.message));
           else void plugin.writeView(view);
@@ -566,10 +573,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
         void plugin.reloadConfig().then(() => cx.editor.setStatus("Config reloaded"));
         return;
       case "config-open": {
-        const shell = (window as unknown as { require?: (m: string) => { shell?: { openPath(p: string): Promise<string> } } }).require?.("electron")?.shell;
-        const base = (app.vault.adapter as unknown as { getBasePath?: () => string }).getBasePath?.();
-        if (shell && base) void shell.openPath(`${base}/${plugin.configPath()}`);
-        else new Notice(`Config: ${plugin.configPath()}`);
+        plugin.openSettings();
         return;
       }
       case "tutor":

@@ -469,6 +469,24 @@ const checks: Check[] = [
     },
   },
   {
+    name: "settings: helix.toml editor runs Helix keys and :w saves the file",
+    run: () => {
+      evalJs(`JSON.stringify((app.setting.open(), app.setting.openTabById("helix-motions"), 1))`);
+      Bun.sleepSync(500);
+      try {
+        const result = evalJs<{ text: string; status: string | null; warnings: number }>(
+          `JSON.stringify((()=>{const p=app.plugins.plugins["helix-motions"]; const v=p.configView; const host=p.hostForView(v); p.helix.feedKeys(host, "ggx"); const sel=v.state.selection.main; const text=v.state.sliceDoc(sel.from, sel.to); p.helix.feedKeys(host, "<esc>:w<ret>"); return {text, status: null, warnings: p.configWarnings.length}})())`,
+        );
+        expectEq("x selects the first line", result.text, "[editor]\n");
+        Bun.sleepSync(300);
+        expectEq("saved", evalJs(`JSON.stringify(app.plugins.plugins["helix-motions"].helix.status?.message ?? null)`), "helix.toml saved");
+      } finally {
+        evalJs(`JSON.stringify((app.setting.close(), 1))`);
+        openScratch();
+      }
+    },
+  },
+  {
     name: "Option dead keys run their Alt binding in normal mode",
     run: () => {
       setDoc("#[x|]#\n");

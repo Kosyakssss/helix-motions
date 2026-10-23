@@ -190,3 +190,47 @@
   height: var(--hx-hover-height);
   pointer-events: none;
 }
+
+.hx-config-setting {
+  flex-wrap: wrap;
+}
+
+.hx-config-editor {
+  flex-basis: 100%;
+  order: 3;
+  margin-top: var(--size-4-3);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  background: var(--background-primary);
+  font-family: var(--font-monospace);
+  font-size: var(--font-ui-small);
+}
+
+.hx-config-editor .cm-editor {
+  max-height: 60vh;
+}
+
+.hx-config-editor .cm-scroller {
+  padding: var(--size-4-2);
+}
+
+.hx-config-editor .cm-editor.cm-focused {
+  outline: none;
+}
+
+.hx-config-warnings {
+  flex-basis: 100%;
+  order: 4;
+  margin-top: var(--size-4-2);
+  color: var(--text-warning);
+  font-size: var(--font-ui-small);
+}
+
+.hx-config-warnings.hx-hidden {
+  display: none;
+}
+
+.hx-config-editor .cm-panels {
+  border: none;
+  background: transparent;
+}

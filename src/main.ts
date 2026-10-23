@@ -1,6 +1,6 @@
-import { MarkdownView, Notice, Plugin, PluginSettingTab, Setting, editorInfoField, type App, type TFile } from "obsidian";
+import { MarkdownView, Notice, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
 import type { EditorView } from "@codemirror/view";
-import type { TransactionSpec } from "@codemirror/state";
+import type { Extension, TransactionSpec } from "@codemirror/state";
 import { HelixEditor, Context } from "./core/editor";
 import type { Host } from "./core/host";
 import { buildKeymaps } from "./keymap";
@@ -20,13 +20,7 @@ import { commitHistoryNow } from "./commands/jumps";
 import { setPathCompleter } from "./commands/typed";
 import { print, plain } from "./core/markup";
 import { setHelix, helixOwned, toNative } from "./state";
-
-interface Settings {
-  autoPairs: "helix" | "obsidian";
-  insertKeys: "obsidian" | "helix";
-}
-
-const DEFAULT_SETTINGS: Settings = { autoPairs: "helix", insertKeys: "obsidian" };
+import { DEFAULT_SETTINGS, HelixSettingTab, type Settings } from "./obsidian/settings";
 
 export default class HelixMotionsPlugin extends Plugin {
   override settings: Settings = DEFAULT_SETTINGS;
@@ -36,6 +30,10 @@ export default class HelixMotionsPlugin extends Plugin {
   lastFileByLeaf = new Map<string, string[]>();
   lastModified: string[] = [];
   private activeView: EditorView | null = null;
+  configWarnings: string[] = [];
+  editorExtension: Extension = [];
+  private configView: EditorView | null = null;
+  private settingTab: HelixSettingTab | null = null;
 
   override async onload(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<Settings> | null) };
@@ -98,8 +96,7 @@ export default class HelixMotionsPlugin extends Plugin {
         .sort((a, b) => Number(!a.toLowerCase().startsWith(lower)) - Number(!b.toLowerCase().startsWith(lower)) || a.localeCompare(b));
     });
     await this.reloadConfig();
-    this.registerEditorExtension(
-      helixExtension({
+    this.editorExtension = helixExtension({
         editor: this.helix,
         hostFor: (view) => this.hostForView(view),
         insertKeysHelix: () => this.settings.insertKeys === "helix",
@@ -117,12 +114,14 @@ export default class HelixMotionsPlugin extends Plugin {
         onChanges: (view, changes) => {
           this.helix.docChanged(this.hostForView(view), changes);
         },
-      }),
-    );
+        physicalKeys: () => this.settings.physicalKeys,
+      });
+    this.registerEditorExtension(this.editorExtension);
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass("hx-status");
-    this.addSettingTab(new HelixSettingTab(this.app, this));
-    this.addCommand({ id: "reload-config", name: "Reload config.toml", callback: () => void this.reloadConfig() });
+    this.settingTab = new HelixSettingTab(this.app, this);
+    this.addSettingTab(this.settingTab);
+    this.addCommand({ id: "reload-config", name: "Reload helix.toml", callback: () => void this.reloadConfig() });
     this.registerEvent(
       this.app.workspace.on("file-open", (file: TFile | null) => {
         const leaf = this.app.workspace.getMostRecentLeaf();
@@ -140,11 +139,13 @@ export default class HelixMotionsPlugin extends Plugin {
         this.lastModified.push(file.path);
       }),
     );
-    this.registerEvent(
-      (this.app.vault as unknown as { on(name: "raw", cb: (path: string) => void): import("obsidian").EventRef }).on("raw", (path) => {
-        if (path === this.configPath()) void this.reloadConfig();
-      }),
-    );
+    const onConfigFile = (file: { path: string }, oldPath?: string) => {
+      if (file.path === this.configPath() || oldPath === this.configPath()) void this.reloadConfig();
+    };
+    this.registerEvent(this.app.vault.on("modify", (file) => onConfigFile(file)));
+    this.registerEvent(this.app.vault.on("create", (file) => onConfigFile(file)));
+    this.registerEvent(this.app.vault.on("delete", (file) => onConfigFile(file)));
+    this.registerEvent(this.app.vault.on("rename", (file, oldPath) => onConfigFile(file, oldPath)));
   }
 
   api = {
@@ -230,19 +231,45 @@ export default class HelixMotionsPlugin extends Plugin {
   }
 
   configPath(): string {
-    return `${this.app.vault.configDir}/config.toml`;
+    return normalizePath("helix.toml");
+  }
+
+  async readConfigSource(): Promise<string | null> {
+    const file = this.app.vault.getFileByPath(this.configPath());
+    return file ? await this.app.vault.read(file) : null;
+  }
+
+  async saveConfigSource(text: string): Promise<void> {
+    const file = this.app.vault.getFileByPath(this.configPath());
+    if (file) await this.app.vault.modify(file, text);
+    else await this.app.vault.create(this.configPath(), text);
+    await this.reloadConfig();
+  }
+
+  setConfigView(view: EditorView | null): void {
+    this.configView = view;
+  }
+
+  isConfigView(view: EditorView | null): boolean {
+    return view !== null && view === this.configView;
+  }
+
+  openSettings(): void {
+    const setting = (this.app as unknown as { setting?: { open(): void; openTabById(id: string): void } }).setting;
+    setting?.open();
+    setting?.openTabById(this.manifest.id);
   }
 
   async reloadConfig(): Promise<void> {
-    const adapter = this.app.vault.adapter;
-    const path = this.configPath();
-    const source = (await adapter.exists(path)) ? await adapter.read(path) : null;
+    const source = await this.readConfigSource();
     const loaded = loadConfig(source, this.baseConfig());
+    const changed = loaded.warnings.join("\n") !== this.configWarnings.join("\n");
     this.helix.config = loaded.config;
     this.helix.keymaps = buildKeymaps(loaded.keys);
-    if (loaded.warnings.length > 0) {
-      console.warn("Helix Motions config warnings:\n" + loaded.warnings.join("\n"));
-      new Notice(`Helix Motions: ${loaded.warnings.length} config warning(s). See the developer console.`);
+    this.configWarnings = loaded.warnings;
+    this.settingTab?.showWarnings();
+    if (changed && loaded.warnings.length > 0) {
+      new Notice(`Helix: ${loaded.warnings.length === 1 ? "1 warning" : `${loaded.warnings.length} warnings`} in helix.toml, see the plugin settings.`);
     }
     this.applyViewConfig();
     this.refreshStatus();
@@ -343,50 +370,6 @@ export default class HelixMotionsPlugin extends Plugin {
   async saveSettings(): Promise<void> {
     await this.saveData(this.settings);
     this.helix.helixAutoPairs = this.settings.autoPairs === "helix";
-  }
-}
-
-class HelixSettingTab extends PluginSettingTab {
-  constructor(
-    app: App,
-    readonly plugin: HelixMotionsPlugin,
-  ) {
-    super(app, plugin);
-  }
-
-  override display(): void {
-    const { containerEl } = this;
-    containerEl.empty();
-    new Setting(containerEl)
-      .setName("Auto-pairs")
-      .setDesc("Helix: Helix's auto_pairs and [editor.auto-pairs] in config.toml. Obsidian: Obsidian's own auto-pair settings.")
-      .addDropdown((d) =>
-        d
-          .addOption("helix", "Helix")
-          .addOption("obsidian", "Obsidian")
-          .setValue(this.plugin.settings.autoPairs)
-          .onChange(async (v) => {
-            this.plugin.settings.autoPairs = v as Settings["autoPairs"];
-            await this.plugin.saveSettings();
-          }),
-      );
-    new Setting(containerEl)
-      .setName("Enter, tab and backspace in insert mode")
-      .setDesc("Obsidian: list continuation, list indent, table cells. Helix: Helix's insert_newline, smart_tab and delete_char_backward.")
-      .addDropdown((d) =>
-        d
-          .addOption("obsidian", "Obsidian")
-          .addOption("helix", "Helix")
-          .setValue(this.plugin.settings.insertKeys)
-          .onChange(async (v) => {
-            this.plugin.settings.insertKeys = v as Settings["insertKeys"];
-            await this.plugin.saveSettings();
-          }),
-      );
-    new Setting(containerEl)
-      .setName("Config file")
-      .setDesc(`Helix config is read from ${this.plugin.configPath()}.`)
-      .addButton((b) => b.setButtonText("Reload").onClick(() => void this.plugin.reloadConfig()));
   }
 }
 
