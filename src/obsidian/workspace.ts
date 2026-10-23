@@ -67,7 +67,7 @@ function linkUnderCursor(cx: Context): { kind: "wiki" | "md" | "url"; target: st
   ];
   for (const [re, kind] of patterns) {
     for (const m of text.matchAll(re)) {
-      const start = m.index!;
+      const start = m.index;
       const end = start + m[0].length;
       if (rel >= start && rel < end) return { kind, target: kind === "url" ? m[0] : decodeURI(m[1]!) };
     }
@@ -246,7 +246,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
                 const pos = cx.host.state.doc.line(h.position.start.line + 1).from;
                 const doc = cx.host.state.doc;
                 setSel(cx, selOf(cx).transform((r) => r.putCursor(doc, pos, false)).ensureInvariants(doc));
-                (cx.host.view as EditorView | null)?.focus();
+                cx.host.view?.focus();
               },
             })),
             "Headings",
@@ -281,7 +281,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
             const from = Math.min(u.from, doc.length);
             pushJump(cx);
             setSel(cx, new Selection([new Range(from, Math.min(u.to, doc.length))], 0).ensureInvariants(doc));
-            (cx.host.view as EditorView | null)?.focus();
+            cx.host.view?.focus();
           },
         }));
         picker(() => new ListModal(app, items, "Unresolved links").open());
@@ -364,12 +364,12 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
         const ev = cx.host.view;
         if (!link || !ev) return;
         const coords = ev.coordsAtPos(selOf(cx).primary().cursor(cx.host.state.doc));
-        const target = document.body.createSpan({ cls: "hx-hover-anchor" });
-        target.style.position = "fixed";
-        target.style.left = `${coords?.left ?? 0}px`;
-        target.style.top = `${coords?.top ?? 0}px`;
-        target.style.width = "1px";
-        target.style.height = `${(coords?.bottom ?? 0) - (coords?.top ?? 0)}px`;
+        const target = ev.dom.ownerDocument.body.createSpan({ cls: "hx-hover-anchor" });
+        target.setCssProps({
+          "--hx-hover-left": `${coords?.left ?? 0}px`,
+          "--hx-hover-top": `${coords?.top ?? 0}px`,
+          "--hx-hover-height": `${(coords?.bottom ?? 0) - (coords?.top ?? 0)}px`,
+        });
         app.workspace.trigger("hover-link", {
           event: new MouseEvent("mouseover", { clientX: coords?.left ?? 0, clientY: coords?.bottom ?? 0, metaKey: true, ctrlKey: true }),
           source: "editor",
@@ -573,7 +573,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
         return;
       }
       case "tutor":
-        new Notice("The Helix tutor is not bundled yet.");
+        new Notice("The tutor is not bundled yet.");
         return;
       default:
         cx.editor.setStatus(`${name} is not available`);

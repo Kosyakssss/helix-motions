@@ -13,7 +13,7 @@ import { makeWorkspace, leafId } from "./obsidian/workspace";
 import { makeViewOps } from "./obsidian/viewops";
 import { renderStatus } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
-import { ElectronClipboard } from "./obsidian/clipboard";
+import { SystemClipboard } from "./obsidian/clipboard";
 import { helixField } from "./state";
 import { Registers } from "./registers";
 import { commitHistoryNow } from "./commands/jumps";
@@ -42,11 +42,11 @@ export default class HelixMotionsPlugin extends Plugin {
     const vault = this.app.vault as unknown as { getConfig(key: string): unknown };
     const plugins = (this.app as unknown as { plugins: { enabledPlugins: Set<string> } }).plugins;
     if (vault.getConfig("vimMode")) {
-      new Notice("Helix Motions: turn off Settings → Editor → Vim key bindings, then reload the plugin.", 0);
+      new Notice("Helix: turn off vim key bindings in the editor settings, then reload the plugin.", 0);
       return;
     }
     if (plugins.enabledPlugins.has("vim-motions")) {
-      new Notice("Helix Motions: turn off the Vim Motions plugin, then reload this plugin.", 0);
+      new Notice("Helix: turn off the vim motions plugin, then reload this plugin.", 0);
       return;
     }
     this.helix = new HelixEditor(buildKeymaps(), this.baseConfig());
@@ -57,7 +57,12 @@ export default class HelixMotionsPlugin extends Plugin {
     this.helix.visualLines = true;
     this.helix.continueLists = true;
     this.helix.helixAutoPairs = this.settings.autoPairs === "helix";
-    this.helix.registers = new Registers(new ElectronClipboard());
+    const clipboard = new SystemClipboard();
+    clipboard.refresh();
+    this.helix.registers = new Registers(clipboard);
+    this.registerDomEvent(window, "focus", () => clipboard.refresh());
+    this.registerDomEvent(document, "copy", () => window.setTimeout(() => clipboard.refresh(), 0));
+    this.registerDomEvent(document, "cut", () => window.setTimeout(() => clipboard.refresh(), 0));
     this.helix.workspace = makeWorkspace(this);
     this.helix.viewOps = makeViewOps(() => this.helix.config.scrolloff);
     this.helix.commentTokens = (host, pos) => commentTokensAt(host.state.doc, pos);
@@ -366,7 +371,7 @@ class HelixSettingTab extends PluginSettingTab {
           }),
       );
     new Setting(containerEl)
-      .setName("Insert keys (Enter, Tab, Backspace)")
+      .setName("Enter, tab and backspace in insert mode")
       .setDesc("Obsidian: list continuation, list indent, table cells. Helix: Helix's insert_newline, smart_tab and delete_char_backward.")
       .addDropdown((d) =>
         d

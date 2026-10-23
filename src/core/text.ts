@@ -158,7 +158,5 @@ export function lineWithEnding(doc: Text, idx: number): string {
 }
 
 export function charCount(s: string): number {
-  let n = 0;
-  for (const _ of s) n++;
-  return n;
+  return [...s].length;
 }

@@ -181,3 +181,12 @@
 .hx .hx-cursorline {
   background-color: var(--background-modifier-hover);
 }
+
+.hx-hover-anchor {
+  position: fixed;
+  left: var(--hx-hover-left);
+  top: var(--hx-hover-top);
+  width: 1px;
+  height: var(--hx-hover-height);
+  pointer-events: none;
+}

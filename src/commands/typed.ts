@@ -354,7 +354,7 @@ const DEFS: (Omit<TypableCommand, "fun"> & { fun: TypableCommand["fun"] })[] = [
   { name: "redraw", aliases: [], doc: "Clear and re-render the whole UI", fun: validateOnly((cx) => cx.host.view?.requestMeasure()) },
 ];
 
-export const TYPABLE: TypableCommand[] = DEFS as TypableCommand[];
+export const TYPABLE: TypableCommand[] = DEFS;
 
 export const TYPABLE_MAP = new Map<string, TypableCommand>();
 for (const cmd of TYPABLE) {

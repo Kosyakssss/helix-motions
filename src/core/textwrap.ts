@@ -231,12 +231,12 @@ function unfill(text: string): [string, Options] {
   });
   let unfilled = "";
   let detected: string | null = null;
-  nonEmptyLines(text).forEach(([line, ending], idx) => {
+  for (const [idx, [line, ending]] of nonEmptyLines(text).entries()) {
     if (idx === 0) unfilled += line.slice(options.initialIndent.length);
     else unfilled += " " + line.slice(options.subsequentIndent.length);
     if (detected === null && ending !== null) detected = ending;
     else if (detected === "\r\n" && ending === "\n") detected = ending;
-  });
+  }
   if (detected !== null && text.endsWith(detected)) unfilled += detected;
   options.lineEnding = detected ?? "\n";
   return [unfilled, options];

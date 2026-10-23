@@ -39,10 +39,7 @@ class EolCursor extends WidgetType {
     return other.cls === this.cls;
   }
   toDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = this.cls;
-    span.textContent = " ";
-    return span;
+    return createSpan({ cls: this.cls, text: " " });
   }
   override ignoreEvent(): boolean {
     return false;
@@ -224,13 +221,13 @@ export function helixExtension(env: ViewEnv): Extension {
       compositionstart(_event, view) {
         const value = view.state.field(helixField, false);
         if (!value || (value.mode === "insert" && !editor.activePrompt)) return false;
-        activeWindow.setTimeout(() => {
+        window.setTimeout(() => {
           if (view.compositionStarted) endComposition(view);
         }, 0);
         return false;
       },
       keydown(event, view) {
-        if (event.isComposing || event.keyCode === 229) {
+        if (event.isComposing || event.key === "Process") {
           const value = view.state.field(helixField, false);
           if (!value || (value.mode === "insert" && !editor.activePrompt)) return false;
           endComposition(view);
@@ -263,7 +260,7 @@ export function helixExtension(env: ViewEnv): Extension {
     EditorView.inputHandler.of((view) => {
       const value = view.state.field(helixField, false);
       if (!value || (value.mode === "insert" && !editor.activePrompt)) return false;
-      if (view.compositionStarted) activeWindow.setTimeout(() => endComposition(view), 0);
+      if (view.compositionStarted) window.setTimeout(() => endComposition(view), 0);
       return true;
     }),
   );

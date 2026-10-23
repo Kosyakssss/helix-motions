@@ -264,7 +264,7 @@ export function loadConfig(source: string | null, base: Config = defaultConfig()
   if (source === null) return { config, keys, warnings };
   let doc: Record<string, unknown>;
   try {
-    doc = parse(source) as Record<string, unknown>;
+    doc = parse(source);
   } catch (err) {
     warnings.push(`config.toml: ${(err as Error).message}`);
     return { config, keys, warnings };
