@@ -18,3 +18,4 @@ test-vault/*
 test-vault/notes/*
 !test-vault/notes/Second.md
 !test-vault/.obsidian/
+dist

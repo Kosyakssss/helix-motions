@@ -2,9 +2,9 @@
 
 ## Against real Helix
 
-`~/code/helix` holds Helix at `ba40e54742` with a local test, `helix-term/tests/oracle.rs` (not upstream). It runs key sequences in real Helix and returns text, selections and mode.
+`test/oracle/oracle.rs` is a Helix integration test that runs key sequences in real Helix and returns text, selections and mode. `sh test/oracle/setup.sh` clones Helix at `ba40e54742` next to this repo (or into `$HELIX_DIR`) and copies the test in. Building it needs `cargo`.
 
-- `bun test`: runs the hand suite (3,528 cases) and 5 fuzz seeds (~15,000 cases) through the headless engine and compares with Helix. Results from Helix are cached in `test/oracle/cache.json` (not committed). Missing cases call Helix, so `cargo` must work in `~/code/helix`.
+- `bun test`: runs the hand suite (3,528 cases) and 5 fuzz seeds (~15,000 cases) through the headless engine and compares with Helix. Results from Helix are cached in `test/oracle/cache.json` (not committed). Missing cases call Helix.
 - `bun test/oracle/diff.ts hand|fuzz [filter]`: same, with a readable failure list.
 - `bun test/oracle/one.ts cases.json`: check a few `[markup, keys]` pairs.
 

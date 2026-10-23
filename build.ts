@@ -2,7 +2,8 @@ import { copyFileSync, mkdirSync, watch } from "node:fs";
 import { resolve } from "node:path";
 
 const root = import.meta.dir;
-const out = resolve(root, "test-vault/.obsidian/plugins/helix-motions");
+const outArg = process.argv.indexOf("--out");
+const out = outArg > 0 ? resolve(process.argv[outArg + 1]!) : resolve(root, "test-vault/.obsidian/plugins/helix-motions");
 const external = [
   "obsidian",
   "electron",

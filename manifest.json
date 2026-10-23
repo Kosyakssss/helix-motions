@@ -3,7 +3,7 @@
   "name": "Helix Motions",
   "version": "0.1.0",
   "minAppVersion": "1.13.0",
-  "description": "The Helix editing model for Obsidian.",
+  "description": "Edit notes with Helix keys, selections and multiple cursors, configured with your Helix config.",
   "author": "Kote",
   "isDesktopOnly": true
 }

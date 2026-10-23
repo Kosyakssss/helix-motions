@@ -112,7 +112,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | Command | Mark | Reason |
 | --- | --- | --- |
 | `yank`, `yank_joined`, `replace_with_yanked`, `paste_after`, `paste_before` | port | Registers. |
-| `yank_to_clipboard`, `yank_joined_to_clipboard`, `yank_main_selection_to_clipboard`, `replace_selections_with_clipboard`, `paste_clipboard_after`, `paste_clipboard_before` | adapt | Register `+` through the Electron clipboard. |
+| `yank_to_clipboard`, `yank_joined_to_clipboard`, `yank_main_selection_to_clipboard`, `replace_selections_with_clipboard`, `paste_clipboard_after`, `paste_clipboard_before` | adapt | Register `+` through `navigator.clipboard`. Reads are async, so the plugin keeps a copy, refreshed when Obsidian gets focus and after copy or cut. |
 | `yank_to_primary_clipboard`, `yank_joined_to_primary_clipboard`, `yank_main_selection_to_primary_clipboard`, `replace_selections_with_primary_clipboard`, `paste_primary_clipboard_after`, `paste_primary_clipboard_before` | adapt | macOS has no primary selection. Copy what Helix's `pasteboard` provider does for `*`. |
 
 ### View
@@ -139,8 +139,8 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `lsp_or_syntax_symbol_picker`, `symbol_picker`, `syntax_symbol_picker` | adapt | Headings of this note from `metadataCache`. |
 | `lsp_or_syntax_workspace_symbol_picker`, `workspace_symbol_picker`, `syntax_workspace_symbol_picker` | adapt | Headings of all notes from `metadataCache`. |
 | `changed_file_picker` | skip | VCS. |
-| `diagnostics_picker`, `workspace_diagnostics_picker` | skip | LSP. |
-| `code_action` | skip | LSP. |
+| `diagnostics_picker`, `workspace_diagnostics_picker` | adapt | Unresolved links in the note, and in the vault. `]d` `[d` `[D` `]D` jump between them in the note. |
+| `code_action` | adapt | Opens Obsidian's command palette. |
 | `select_references_to_symbol_under_cursor` | skip | LSP. |
 | `command_palette` | adapt | Obsidian command palette. The plugin registers its commands there. |
 | `goto_file` | adapt | Open the `[[link]]`, markdown link, URL or vault path in the selection. |
@@ -231,7 +231,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `:goto`, `:g` | port | Line number. |
 | `:earlier`, `:ear`, `:later`, `:lat` | adapt | Linear history. Step counts work. Time spans map to history events by time. |
 | `:yank-join` | port | Registers. |
-| `:clipboard-yank`, `:clipboard-yank-join`, `:clipboard-paste-after`, `:clipboard-paste-before`, `:clipboard-paste-replace` | adapt | Electron clipboard. |
+| `:clipboard-yank`, `:clipboard-yank-join`, `:clipboard-paste-after`, `:clipboard-paste-before`, `:clipboard-paste-replace` | adapt | System clipboard, as for `+`. |
 | `:primary-clipboard-yank`, `:primary-clipboard-yank-join`, `:primary-clipboard-paste-after`, `:primary-clipboard-paste-before`, `:primary-clipboard-paste-replace` | adapt | Same as `*` register above. |
 | `:show-clipboard-provider` | skip | Only one provider. |
 | `:clear-register`, `:set-register` | port | Registers. |
@@ -240,7 +240,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `:reflow` | port | Uses `text-width`. |
 | `:indent-style` | adapt | Per-editor CM6 `indentUnit`. |
 | `:set-option`, `:set`, `:toggle-option`, `:toggle`, `:get-option`, `:get` | adapt | Only the options this plugin supports. |
-| `:config-reload` | adapt | Re-read `.obsidian/config.toml`. |
+| `:config-reload` | adapt | Re-read `helix.toml`. |
 | `:config-open` | adapt | Obsidian cannot open files in `.obsidian/` as notes. Open in the system default app. |
 | `:config-open-workspace` | skip | The vault config is the only config. |
 | `:echo`, `:noop` | port | Trivial. |
@@ -260,7 +260,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `:log-open` | skip | No log file. Use the dev console. |
 | `:workspace-trust`, `:workspace-untrust`, `:workspace-exclude` | skip | No LSP to trust. |
 
-## Config (`.obsidian/config.toml`)
+## Config (`helix.toml` in the vault root)
 
 Read with the same structure and defaults as Helix. Unknown or skipped keys log one warning and are ignored, so Kote's file loads without errors.
 
@@ -280,16 +280,16 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 | `auto-info` | adapt | Which-key panel. |
 | `auto-pairs` | port | `auto_pairs.rs`, full. Plugin option picks Helix's (default) or Obsidian's. With Helix's on, Obsidian's auto-pair settings are bypassed. |
 | `smart-tab.*` | port | Applies when the Helix insert-keys option is on. |
-| `line-number` | adapt | `relative` via CM6 `lineNumbers({formatNumber})`, only when Obsidian's line numbers are on. |
-| `cursorline` | adapt | CM6 `highlightActiveLine`. |
-| `whitespace.render` | adapt | CM6 `highlightWhitespace`, partial. |
+| `line-number`, `gutters` | adapt | Switch Obsidian's own "Show line number" setting, only when `helix.toml` sets one of these keys. `relative` gives a warning and absolute numbers. We draw no numbers. |
+| `cursorline` | adapt | Highlights every line with a cursor, viewport only. Obsidian's own active line follows CodeMirror's caret, which sits on the next line after `x`, so it can't be used. |
+| `whitespace.*` | skip | Not drawn. Obsidian draws its own indentation guides. Gives a warning. |
 | `trim-trailing-whitespace`, `trim-final-newlines`, `insert-final-newline` | adapt | Apply on `:write` only. Obsidian's autosave does not go through us. |
 | `auto-save.*` | skip | Obsidian always autosaves. |
 | `soft-wrap.*` | skip | Obsidian's own "Readable line length" and wrap rules. |
-| `indent-guides.*` | skip | Obsidian has its own indent guides. |
+| `indent-guides.render` | adapt | Switches Obsidian's "Show indentation guides" setting when set. Other keys ignored. |
 | `mouse`, `middle-click-paste` | skip | Obsidian is mouse-first; macOS has no middle-click paste. |
 | `shell`, `clipboard-provider`, `true-color`, `undercurl`, `kitty-keyboard-protocol` | skip | Terminal or shell only. |
-| `bufferline`, `gutters.*`, `rulers`, `cursorcolumn`, `popup-border`, `rainbow-brackets` | skip | Obsidian draws its own UI. |
+| `bufferline`, `rulers`, `cursorcolumn`, `popup-border`, `rainbow-brackets` | skip | Obsidian draws its own UI. |
 | `lsp.*`, `inline-diagnostics.*`, `end-of-line-diagnostics`, `auto-completion`, `path-completion`, `word-completion.*`, `completion-*`, `preview-completion-insert`, `idle-timeout`, `auto-format`, `workspace-lsp-roots`, `workspace-trust.*` | skip | LSP or completion. |
 | `continue-comments`, `indent-heuristic`, `default-line-ending`, `atomic-save`, `editor-config` | skip | Obsidian controls these. |
 | `file-picker.*`, `file-explorer.*`, `buffer-picker.*` | skip | Obsidian's switcher and explorer. |
@@ -303,12 +303,13 @@ Obsidian's editor parser is most likely a flat token stream (HyperMD-based), not
 
 ## Plugin options
 
-Options that Helix does not have. They live in the plugin's settings tab, not in `config.toml`.
+Options that Helix does not have. They live in the plugin's settings tab, not in `helix.toml`. The same tab has an editor for `helix.toml` with Helix keys; `:w` or Mod+S saves it, and config warnings show under it.
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | Auto-pairs | Helix | Helix: `auto_pairs.rs` and `[editor.auto-pairs]`. Obsidian: Obsidian's own auto-pair settings. |
 | Insert keys (Enter, Tab, Backspace) | Obsidian | Obsidian: list continuation, list indent, table cells. Helix: `insert_newline`, `smart_tab`, `delete_char_backward` ports. |
+| Read keys by position | On | Normal and select mode read keys by their US-layout position with non-Latin layouts. |
 
 ## Decisions
 
@@ -317,6 +318,9 @@ Options that Helix does not have. They live in the plugin's settings tab, not in
 3. `o` and `O` continue list markers.
 4. Insert keys: both, as an option (above).
 5. No text objects beyond Helix's. If Helix does not have it, we do not have it.
+6. We draw only what Obsidian can't: block cursors, insert-mode selection spans, `gw` labels, cursorline, the prompt and the which-key box. Selections in normal and select mode are Obsidian's native ones. Line numbers and indent guides are Obsidian's settings.
+7. Helix options live in `helix.toml` only. The settings tab holds only choices Helix can't make.
+8. Desktop only.
 
 ## Status
 
@@ -327,5 +331,4 @@ Known gaps:
 - Commands marked **later** (syntax tree, `:tutor`) show "not available".
 - In insert mode, Live Preview shows markup only around the caret. Typing replaces a non-empty native selection, so the native selection must be a caret there.
 - `Cmd-Z` is Obsidian's own undo. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
-- The `+` register uses Electron's renderer clipboard. Electron marks it deprecated.
 - On a 20,000-line note one key costs about one Obsidian transaction (~25 ms on an M1 Air).
