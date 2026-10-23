@@ -68,14 +68,29 @@ class LabelWidget extends WidgetType {
 }
 
 function endComposition(view: EditorView): void {
-  const input = (view as unknown as { inputState?: { composing: number; compositionFirstChange: boolean | null } }).inputState;
-  if (input && input.composing >= 0) {
-    input.composing = -1;
-    input.compositionFirstChange = null;
+  const scroller = view.scrollDOM;
+  const parent = scroller.parentElement;
+  if (!parent) return;
+  const sibling = scroller.nextSibling;
+  const selection = view.dom.ownerDocument.getSelection();
+  const saved = selection && {
+    anchorNode: selection.anchorNode,
+    anchorOffset: selection.anchorOffset,
+    focusNode: selection.focusNode,
+    focusOffset: selection.focusOffset,
+  };
+  scroller.remove();
+  parent.insertBefore(scroller, sibling);
+  try {
+    if (saved && selection && saved.anchorNode) {
+      selection.setPosition(saved.anchorNode, saved.anchorOffset);
+      if (saved.focusNode) selection.extend(saved.focusNode, saved.focusOffset);
+    }
+  } catch {
+    selection?.removeAllRanges();
   }
-  const dom = view.contentDOM;
-  dom.blur();
-  dom.focus({ preventScroll: true });
+  view.focus();
+  view.contentDOM.dispatchEvent(new CustomEvent("compositionend"));
 }
 
 function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
@@ -209,7 +224,12 @@ export function helixExtension(env: ViewEnv): Extension {
     if (dead && mode === "insert" && !editor.activePrompt) return false;
     const literal = literalWanted(editor, mode);
     let key = keyFromDom(event, literal);
-    if (key === null) return false;
+    if (key === null) {
+      if (!dead) return false;
+      event.preventDefault();
+      event.stopPropagation();
+      return true;
+    }
     if (mode === "insert" && !editor.activePrompt && editor.onNextKeyState === null && (event.altKey || event.ctrlKey)) {
       const physical = keyFromDom(event, false);
       if (physical && physical !== key && pendingNode(editor, "insert").map.has(physical)) key = physical;
@@ -228,9 +248,11 @@ export function helixExtension(env: ViewEnv): Extension {
     EditorView.domEventHandlers({
       compositionstart(_event, view) {
         const value = view.state.field(helixField, false);
-        if (!value || value.mode === "insert" || editor.activePrompt) return false;
-        endComposition(view);
-        return true;
+        if (!value || (value.mode === "insert" && !editor.activePrompt)) return false;
+        activeWindow.setTimeout(() => {
+          if (view.compositionStarted) endComposition(view);
+        }, 0);
+        return false;
       },
       keydown(event, view) {
         if (event.isComposing || event.keyCode === 229) {
@@ -260,6 +282,15 @@ export function helixExtension(env: ViewEnv): Extension {
         this.view.contentDOM.removeEventListener("keydown", this.listener, true);
       }
     },
+  );
+
+  const swallowInput = Prec.highest(
+    EditorView.inputHandler.of((view) => {
+      const value = view.state.field(helixField, false);
+      if (!value || (value.mode === "insert" && !editor.activePrompt)) return false;
+      if (view.compositionStarted) activeWindow.setTimeout(() => endComposition(view), 0);
+      return true;
+    }),
   );
 
   const autoPairsInput = Prec.highest(
@@ -375,6 +406,7 @@ export function helixExtension(env: ViewEnv): Extension {
     syncNativeSelection,
     keyHandler,
     stuckComposition,
+    swallowInput,
     pasteHandler,
     autoPairsInput,
     decorations,

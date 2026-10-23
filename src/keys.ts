@@ -167,7 +167,6 @@ const IGNORED = new Set([
   "Super",
   "Fn",
   "FnLock",
-  "Dead",
   "Process",
   "Unidentified",
   "Compose",

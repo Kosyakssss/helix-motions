@@ -434,6 +434,58 @@ const checks: Check[] = [
       expectTrue("status set", !!s.status && /not available/.test(s.status.message), JSON.stringify(s.status));
     },
   },
+  {
+    name: "Option dead keys run their Alt binding in normal mode",
+    run: () => {
+      setDoc("#[x|]#\n");
+      sendDomKey({ key: "Dead", code: "KeyN", keyCode: 78, modifiers: 1 });
+      const s = state();
+      expectTrue("A-n reached Helix", !!s.status && /select_next_sibling/.test(s.status.message), JSON.stringify(s.status));
+      expectEq("markup", s.markup, "#[x|]#\n");
+    },
+  },
+  {
+    name: "IME composition outside insert mode changes nothing and never sticks",
+    run: () => {
+      setDoc("#[h|]#ello world\n");
+      ob("dev:cdp", "method=Input.imeSetComposition", `params=${JSON.stringify({ text: "˜", selectionStart: 1, selectionEnd: 1 })}`);
+      ob("dev:cdp", "method=Input.insertText", `params=${JSON.stringify({ text: "ñ" })}`);
+      Bun.sleepSync(100);
+      expectEq("markup", state().markup, "#[h|]#ello world\n");
+      expectEq("not composing", dom("return v.compositionStarted"), false);
+      keys("e");
+      expectEq("keys still work", state().markup, "#[hello|]# world\n");
+    },
+  },
+  {
+    name: "IME composition in insert mode inserts the composed text",
+    run: () => {
+      setDoc("#[h|]#ello\n");
+      keys("i");
+      ob("dev:cdp", "method=Input.imeSetComposition", `params=${JSON.stringify({ text: "˜", selectionStart: 1, selectionEnd: 1 })}`);
+      ob("dev:cdp", "method=Input.insertText", `params=${JSON.stringify({ text: "ñ" })}`);
+      Bun.sleepSync(100);
+      keys("<esc>");
+      expectEq("markup", state().markup, "ñ#[|h]#ello\n");
+    },
+  },
+  {
+    name: "Tab cycles path completions with spaces without piling them up",
+    run: () => {
+      setDoc("#[x|]#\n");
+      keys(":open<space>");
+      const lines: string[] = [];
+      for (let i = 0; i < 4; i++) {
+        keys("<tab>");
+        lines.push(state().prompt!.line);
+      }
+      keys("<esc>");
+      for (const line of lines) {
+        const rest = line.slice("open ".length);
+        expectTrue("one argument", /^'[^']*(?:''[^']*)*'$|^\S+$/.test(rest), line);
+      }
+    },
+  },
 ];
 
 openScratch();

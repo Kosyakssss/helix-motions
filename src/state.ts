@@ -83,7 +83,6 @@ export function toNative(value: HelixState, doc: Text): EditorSelection {
 export const syncNativeSelection = EditorState.transactionFilter.of((tr) => {
   if (tr.annotation(helixOwned)) return tr;
   if (!tr.docChanged && !tr.selection) return tr;
-  if (tr.docChanged && tr.isUserEvent("input.type") && tr.startState.field(helixField).mode !== "insert") return [];
   const value = derive(tr.startState.field(helixField), tr);
   const native = toNative(value, tr.newDoc);
   if (native.eq(tr.newSelection)) return tr;
