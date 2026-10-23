@@ -2,6 +2,7 @@ import type { Text } from "@codemirror/state";
 import { nextGraphemeBoundary, prevGraphemeBoundary } from "./graphemes";
 import { Range } from "./selection";
 import { findNthClosestPairsPos, findNthPairsPos } from "./surround";
+import type { Syntax } from "./syntax/syntax";
 import { categorizeChar, charAt, charBefore, charIsWhitespace, lineIndex, lineIsEmpty, lineStart } from "./core/text";
 
 export type TextObject = "around" | "inside";
@@ -100,10 +101,17 @@ export function textobjectParagraph(doc: Text, range: Range, textobject: TextObj
   return new Range(lineStart(doc, lineBack), lineStart(doc, line));
 }
 
-function pairSurroundImpl(doc: Text, range: Range, textobject: TextObject, ch: string | null, count: number): Range {
+function pairSurroundImpl(
+  doc: Text,
+  range: Range,
+  textobject: TextObject,
+  ch: string | null,
+  count: number,
+  syntax: Syntax | null,
+): Range {
   let pair: [number, number];
   try {
-    pair = ch !== null ? findNthPairsPos(doc, ch, range, count) : findNthClosestPairsPos(doc, range, count);
+    pair = ch !== null ? findNthPairsPos(doc, ch, range, count, syntax) : findNthClosestPairsPos(doc, range, count, syntax);
   } catch {
     return range;
   }
@@ -118,10 +126,23 @@ function pairSurroundImpl(doc: Text, range: Range, textobject: TextObject, ch: s
     : new Range(nextGraphemeBoundary(doc, anchor), head);
 }
 
-export function textobjectPairSurround(doc: Text, range: Range, textobject: TextObject, ch: string, count: number): Range {
-  return pairSurroundImpl(doc, range, textobject, ch, count);
+export function textobjectPairSurround(
+  doc: Text,
+  range: Range,
+  textobject: TextObject,
+  ch: string,
+  count: number,
+  syntax: Syntax | null = null,
+): Range {
+  return pairSurroundImpl(doc, range, textobject, ch, count, syntax);
 }
 
-export function textobjectPairSurroundClosest(doc: Text, range: Range, textobject: TextObject, count: number): Range {
-  return pairSurroundImpl(doc, range, textobject, null, count);
+export function textobjectPairSurroundClosest(
+  doc: Text,
+  range: Range,
+  textobject: TextObject,
+  count: number,
+  syntax: Syntax | null = null,
+): Range {
+  return pairSurroundImpl(doc, range, textobject, null, count, syntax);
 }

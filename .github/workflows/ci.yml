@@ -20,6 +20,7 @@ jobs:
       - run: bun run check
       - run: bun run lint
       - run: bun build.ts --out dist
+      - run: sh tree-sitter/build.sh && git diff --exit-code tree-sitter
 
   differential:
     runs-on: ubuntu-latest

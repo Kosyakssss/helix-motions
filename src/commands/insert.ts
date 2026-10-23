@@ -1,12 +1,13 @@
 import type { Text } from "@codemirror/state";
-import type { Context } from "../core/editor";
+import type { Context, HelixEditor } from "../core/editor";
+import { selection, type Host } from "../core/host";
 import {
   nextGraphemeBoundary,
   nthNextGraphemeBoundary,
   nthPrevGraphemeBoundary,
   prevGraphemeBoundary,
 } from "../graphemes";
-import { hookDelete, hookInsert, makeAutoPairs } from "../auto-pairs";
+import { hookDelete, hookInsert, makeAutoPairs, type AutoPairs } from "../auto-pairs";
 import { wordMove } from "../movement";
 import { Range, Selection } from "../selection";
 import { charAt, charBefore, isWhitespace, lineIndex } from "../core/text";
@@ -30,15 +31,55 @@ import {
 import type { CommandFn } from "./motion";
 import { commitHistoryNow } from "./jumps";
 
+const MARKDOWN_AUTO_PAIRS: [string, string][] = [
+  ["(", ")"],
+  ["{", "}"],
+  ["[", "]"],
+  ['"', '"'],
+  ["'", "'"],
+  ["`", "`"],
+  ["‘", "’"],
+  ["«", "»"],
+  ["“", "”"],
+];
+
+export function autoPairsFor(
+  editor: HelixEditor,
+  host: Host,
+  differs: (global: AutoPairs, markdown: AutoPairs) => boolean = () => true,
+): AutoPairs | null {
+  const pairs = editor.config.autoPairs;
+  if (!pairs || !editor.helixAutoPairs) return null;
+  const global = makeAutoPairs(pairs);
+  if (!editor.syntax) return global;
+  const markdown = makeAutoPairs(MARKDOWN_AUTO_PAIRS);
+  if (!differs(global, markdown)) return global;
+  const syntax = editor.syntax(host);
+  if (!syntax) return global;
+  const primary = selection(host).primary();
+  const layer = syntax.layerForByteRange(syntax.byteOf(primary.from()), syntax.byteOf(primary.to()));
+  return layer.language.id === "markdown" ? markdown : global;
+}
+
+export function insertDiffers(doc: Text, ranges: readonly Range[], ch: string) {
+  return (a: AutoPairs, b: AutoPairs) =>
+    ranges.some((r) => JSON.stringify(hookInsert(doc, r, ch, a)) !== JSON.stringify(hookInsert(doc, r, ch, b)));
+}
+
+export function mayAutoPair(editor: HelixEditor, ch: string): boolean {
+  const pairs = editor.config.autoPairs;
+  if (!pairs || !editor.helixAutoPairs) return false;
+  const has = (list: [string, string][]) => list.some(([open, close]) => open === ch || close === ch);
+  return has(pairs) || (editor.syntax !== null && has(MARKDOWN_AUTO_PAIRS)) || isWhitespace(ch);
+}
+
 export function autoPairsOf(cx: Context) {
-  const pairs = cx.editor.config.autoPairs;
-  if (!pairs || !cx.editor.helixAutoPairs) return null;
-  return makeAutoPairs(pairs);
+  return autoPairsFor(cx.editor, cx.host);
 }
 
 export function insertChar(cx: Context, ch: string): void {
   const doc = docOf(cx);
-  const pairs = autoPairsOf(cx);
+  const pairs = autoPairsFor(cx.editor, cx.host, insertDiffers(doc, selOf(cx).ranges, ch));
   changeByAndWithSelection(cx, (range) => {
     if (pairs) {
       const hooked = hookInsert(doc, range, ch, pairs);

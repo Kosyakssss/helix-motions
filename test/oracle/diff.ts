@@ -1,7 +1,7 @@
 import { oracleAsync, type Case } from "./oracle";
 import { run } from "../harness";
-import { handSuite } from "./suites";
-import { fuzzSuite } from "./fuzz";
+import { handSuite, markdownSuite } from "./suites";
+import { fuzzSuite, markdownFuzzSuite } from "./fuzz";
 
 export interface Failure {
   c: Case;
@@ -19,7 +19,7 @@ export async function compare(cases: Case[]): Promise<{ failures: Failure[]; ski
       skipped++;
       continue;
     }
-    const actual = run(c.in, c.keys);
+    const actual = run(c.in, c.keys, undefined, c.lang);
     const ok =
       !actual.error &&
       actual.text === expected.text &&
@@ -35,7 +35,16 @@ export async function compare(cases: Case[]): Promise<{ failures: Failure[]; ski
 if (import.meta.main) {
   const which = process.argv[2] ?? "hand";
   const filter = process.argv[3];
-  let cases = which === "fuzz" ? fuzzSuite(Number(process.env.FUZZ_N ?? 2000), Number(process.env.FUZZ_SEED ?? 1)) : handSuite();
+  const fuzzN = Number(process.env.FUZZ_N ?? 2000);
+  const fuzzSeed = Number(process.env.FUZZ_SEED ?? 1);
+  let cases =
+    which === "fuzz"
+      ? fuzzSuite(fuzzN, fuzzSeed)
+      : which === "md"
+        ? markdownSuite()
+        : which === "mdfuzz"
+          ? markdownFuzzSuite(fuzzN, fuzzSeed)
+          : handSuite();
   if (filter) cases = cases.filter((c) => c.keys.includes(filter) || c.id.startsWith(filter));
   const { failures, skipped } = await compare(cases);
   const byKeys = new Map<string, Failure[]>();

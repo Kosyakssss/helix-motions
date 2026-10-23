@@ -67,3 +67,54 @@ export function handSuite(): Case[] {
   }
   return cases;
 }
+
+const MD_TEXTS = [
+  "# Heading one\n\nSome *emphasis* and **strong** text with `code` here.\n\n## Second (part)\n\n- item one\n- item [two](http://x.y)\n  - nested *a*\n- [ ] task\n",
+  "---\ntitle: Note\ntags: [a, b]\n---\n\n# Title\n\nParagraph with [[Wiki link|alias]] and ![[embed.png]].\n",
+  "> quote line one *with* emphasis\n> second line (paren)\n>\n> - list in quote\n\nAfter.\n",
+  "```js\nconst x = (a + [b, c]) * {d};\n```\n\n```md\n# inner *head*\n- li\n```\n\nText (with [nested {brackets}]) end.\n",
+  "| col a | col *b* |\n|---|:---:|\n| `x` | [y](z) |\n| 1 | 2 |\n\nTable done.\n",
+  "1. first **bold _nested_ text**\n2. second\n   1. deep (one)\n3. third\n\n***\n\nLast \"quoted\" 'single' line.\n",
+  "Line with <span>html</span> and $x^2$ math and ~~strike~~ and ==mark==.\n<div>\nblock html\n</div>\n",
+  "Setext heading\n===\n\nAnother\n---\n\n    indented code (x)\n\n- a\n\n  continued para\n- b\n",
+  "Привет **мир** 👋🏽 café *naïve* `漢字`\n\n- [x] done «quote» “smart”\n",
+  "> ```md\n> # q *x*\n> ```\n\nfoo(bar[baz]{qux})\n",
+  "#[",
+  "plain paragraph without anything special\nsecond line of it\n",
+];
+
+const MD_KEYS = [
+  "<A-o>", "<A-o><A-o>", "<A-o><A-o><A-o>", "<A-o><A-o><A-o><A-o><A-o><A-o>", "<A-o><A-i>", "<A-o><A-o><A-i><A-i>",
+  "<A-i>", "<A-i><A-i>", "<A-n>", "<A-p>", "<A-o><A-n>", "<A-o><A-p>", "<A-o><A-o><A-n><A-n>", "<A-a>", "<A-o><A-a>",
+  "<A-I>", "<A-o><A-o><A-I>", "<A-e>", "<A-b>", "<A-b><A-b>", "<A-e><A-e>", "v<A-e>", "v<A-b>", "vl<A-b><A-b>",
+  "x<A-o>", "w<A-o>", "<A-o>d", "<A-o><A-.>", "%<A-i>", "%<A-I>",
+  "mm", "lmm", "mmmm", "vmm", "mim", "mam", "2mim", "mi(", "ma(", "mi[", "mi\"", "ma\"", "mi`", "ma*", "md(", "mdm", "mr([", "mrm\"",
+  "]f", "[f", "]t", "v]f", "vh[f", "]c", "mif", "mac",
+  "i(<esc>", "i‘<esc>", "i“<esc>", "i«<esc>", "i`<esc>", "o‘<esc>", "A“<esc>", "i\"<esc>", "i(<backspace><esc>", "i“<backspace><esc>",
+  "i<ret><esc>", "o<esc>", "w<gt>", "x<lt>",
+];
+
+function graphemeStarts(text: string): number[] {
+  const starts: number[] = [];
+  for (const seg of new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)) starts.push(seg.index);
+  return starts;
+}
+
+export function markdownSuite(): Case[] {
+  const cases: Case[] = [];
+  let n = 0;
+  for (const raw of MD_TEXTS) {
+    const text = raw === "#[" ? "" : raw;
+    const starts = graphemeStarts(text);
+    const picks = new Set<number>();
+    const want = Math.min(12, Math.max(1, starts.length));
+    for (let i = 0; i < want; i++) picks.add(starts.length === 0 ? 0 : starts[Math.floor((i * starts.length) / want)]!);
+    for (const at of picks) {
+      if (text[at - 1] === "#") continue;
+      const end = starts.find((s) => s > at) ?? text.length;
+      const markup = text.length === 0 ? "#[|]#" : text.slice(0, at) + "#[" + text.slice(at, end) + "|]#" + text.slice(end);
+      for (const keys of MD_KEYS) cases.push({ id: `md#${n++}`, in: markup, keys, lang: "markdown" });
+    }
+  }
+  return cases;
+}

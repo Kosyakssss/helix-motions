@@ -23,7 +23,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `move_visual_line_up`, `move_visual_line_down`, `extend_visual_line_up`, `extend_visual_line_down` | adapt | Only CM6 knows the rendered lines (soft wrap, Live Preview widgets). Use `view.moveVertically`. |
 | `copy_selection_on_next_line`, `copy_selection_on_prev_line` | port | Pure selection logic. |
 | `move_next_word_start`, `move_prev_word_start`, `move_next_word_end`, `move_prev_word_end`, `move_next_long_word_start`, `move_prev_long_word_start`, `move_next_long_word_end`, `move_prev_long_word_end`, `move_next_sub_word_start`, `move_prev_sub_word_start`, `move_next_sub_word_end`, `move_prev_sub_word_end` and their `extend_*` twins | port | `movement.rs`, `chars.rs`. Core of the Helix feel. |
-| `move_parent_node_end`, `move_parent_node_start`, `extend_parent_node_end`, `extend_parent_node_start` | later | Need a syntax tree. See "Syntax tree" below. |
+| `move_parent_node_end`, `move_parent_node_start`, `extend_parent_node_end`, `extend_parent_node_start` | port | `movement.rs` on the markdown syntax tree. See "Syntax tree" below. |
 | `find_till_char`, `find_next_char`, `till_prev_char`, `find_prev_char`, `extend_till_char`, `extend_next_char`, `extend_till_prev_char`, `extend_prev_char` | port | Pure text search. Keep the real typed char (layout rule). |
 | `repeat_last_motion` | port | Stores the last motion closure. |
 | `page_up`, `page_down`, `half_page_up`, `half_page_down`, `page_cursor_up`, `page_cursor_down`, `page_cursor_half_up`, `page_cursor_half_down` | adapt | Scroll the CM6 scroller. Rows come from CM6 layout, not cells. |
@@ -49,8 +49,8 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `rotate_selection_contents_forward`, `rotate_selection_contents_backward`, `reverse_selection_contents` | port | Text swap between ranges. |
 | `align_selections` | port | Pads with spaces. |
 | `save_selection` | port | Jumplist. |
-| `expand_selection`, `shrink_selection`, `select_next_sibling`, `select_prev_sibling`, `select_all_siblings`, `select_all_children` | later | Need a syntax tree. See "Syntax tree". |
-| `match_brackets` | port | `match_brackets.rs`, plain-text fallback (no tree-sitter). |
+| `expand_selection`, `shrink_selection`, `select_next_sibling`, `select_prev_sibling`, `select_all_siblings`, `select_all_children` | port | `object.rs` on the markdown syntax tree. See "Syntax tree". |
+| `match_brackets` | port | `match_brackets.rs`, with the syntax tree as in Helix. |
 | `select_textobject_around`, `select_textobject_inner` | port | See "Text objects". |
 | `surround_add`, `surround_replace`, `surround_delete` | port | `surround.rs`. Keep the real typed char. |
 
@@ -171,7 +171,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | Command | Mark | Reason |
 | --- | --- | --- |
 | `goto_next_paragraph`, `goto_prev_paragraph` | port | Listed above. Plain text. |
-| `goto_next_function`, `goto_prev_function`, `goto_next_class`, `goto_prev_class`, `goto_next_parameter`, `goto_prev_parameter`, `goto_next_comment`, `goto_prev_comment`, `goto_next_test`, `goto_prev_test`, `goto_next_xml_element`, `goto_prev_xml_element`, `goto_next_entry`, `goto_prev_entry` | skip | Need tree-sitter textobject queries. Not in Obsidian. |
+| `goto_next_function`, `goto_prev_function`, `goto_next_class`, `goto_prev_class`, `goto_next_parameter`, `goto_prev_parameter`, `goto_next_comment`, `goto_prev_comment`, `goto_next_test`, `goto_prev_test`, `goto_next_xml_element`, `goto_prev_xml_element`, `goto_next_entry`, `goto_prev_entry` | port | Helix has no textobject queries for markdown, so these only push a jump and set the direction, as in Helix. |
 
 ### Diagnostics, VCS, debug, shell
 
@@ -202,8 +202,9 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `w`, `W` | port | `textobject.rs`. |
 | `p` | port | `textobject.rs`. |
 | `(`, `[`, `{`, `<`, `'`, `"`, `` ` ``, other chars | port | `surround.rs`. |
-| `m` | port | Closest pair. Plain-text search, no tree-sitter. |
-| `f`, `t`, `a`, `c`, `T`, `x`, `g` | skip | Tree-sitter queries or VCS. |
+| `m` | port | Closest pair, with the syntax tree as in Helix. |
+| `f`, `t`, `a`, `c`, `T`, `x` | port | Helix has no textobject queries for markdown: the selection does not change, as in Helix. |
+| `g` | skip | VCS. |
 
 ## Typed commands
 
@@ -253,7 +254,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `:set-language`, `:lang` | skip | Notes are markdown. Code blocks take their language from the fence. |
 | `:change-current-directory`, `:cd`, `:show-directory-stack`, `:push-directory`, `:pushd`, `:pop-directory`, `:popd`, `:show-directory`, `:pwd` | skip | The vault root is fixed. |
 | `:lsp-workspace-command`, `:lsp-restart`, `:lsp-stop`, `:yank-diagnostic` | skip | LSP. |
-| `:tree-sitter-scopes`, `:tree-sitter-highlight-name`, `:tree-sitter-layers`, `:tree-sitter-subtree`, `:ts-subtree` | skip | No tree-sitter. |
+| `:tree-sitter-scopes`, `:tree-sitter-highlight-name`, `:tree-sitter-layers`, `:tree-sitter-subtree`, `:ts-subtree` | skip | Debug views for grammar authors. No highlight queries. |
 | `:debug-start`, `:dbg`, `:debug-remote`, `:dbg-tcp`, `:debug-eval` | skip | DAP. |
 | `:insert-output`, `:append-output`, `:pipe`, `:\|`, `:pipe-to`, `:run-shell-command`, `:sh`, `:!` | skip | No shell (plan). |
 | `:reset-diff-change`, `:diffget`, `:diffg` | skip | VCS. |
@@ -299,7 +300,13 @@ Kote's own config after stripping: everything except the `:sh ~/.config/helix/in
 
 ## Syntax tree
 
-Obsidian's editor parser is most likely a flat token stream (HyperMD-based), not a nested tree. Check this in step 3. If it is flat, `expand_selection` and friends need our own markdown tree: section by heading, list, list item, paragraph, line, word. That is a design talk, so they are marked **later**.
+Obsidian's editor parser is a flat token stream, so the plugin parses notes itself with the grammars Helix uses: `tree-sitter-markdown` and `tree-sitter-markdown-inline` at the commit in Helix's `languages.toml`, compiled to WebAssembly together with the tree-sitter C library at Helix's version (0.26.9) by `tree-sitter/build.sh`. The text goes in as UTF-8, as in Helix, so error recovery picks the same trees. Helix updates its trees after every edit; the plugin parses fresh when a command needs a tree, so after an edit a broken spot can still parse differently (1 case in about 6,000 fuzz cases). `src/syntax/syntax.ts` ports Helix's injection layers (`tree-house`): `inline` nodes and table cells get a `markdown.inline` layer, and fenced code marked `md` or `markdown` gets a nested markdown layer.
+
+Uses of the tree, as in Helix: `Alt-o`, `Alt-i`, `Alt-n`, `Alt-p`, `Alt-a`, `Alt-I`, `Alt-e`, `Alt-b`, `mm`, `mim`/`mam` and `mi(` style pairs, `md`/`mr` with pairs, and the auto-pairs of the layer under the cursor (markdown adds `‘’`, `«»` and `“”`).
+
+Helix also has grammars for the code inside fences, HTML, YAML front matter and LaTeX. Those layers do not exist here, so inside them the tree is the markdown one. The `helix.toml` editor in the settings has no tree (Helix would use TOML).
+
+The tree is parsed on demand, when a command needs it, and kept until the note changes. On a 20,000-line note that costs about 100 ms for the first tree command after an edit; on a 2,000-line note about 15 ms. Auto-pairs only ask for the tree when the two pair sets give different results.
 
 ## Plugin options
 
@@ -328,7 +335,7 @@ Steps 2 to 6 are implemented.
 
 Known gaps:
 
-- Commands marked **later** (syntax tree, `:tutor`) show "not available".
+- `:tutor` shows "not available".
 - In insert mode, Live Preview shows markup only around the caret. Typing replaces a non-empty native selection, so the native selection must be a caret there.
 - `Cmd-Z` is Obsidian's own undo. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
 - On a 20,000-line note one key costs about one Obsidian transaction (~25 ms on an M1 Air).

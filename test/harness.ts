@@ -6,6 +6,15 @@ import { buildKeymaps } from "../src/keymap";
 import { helixField, historyField, setHelix, syncNativeSelection, toNative, helixOwned } from "../src/state";
 import { defaultConfig, type Config } from "../src/config";
 import { print, plain } from "../src/core/markup";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { createLoader, SyntaxCache } from "../src/syntax/languages";
+
+const root = resolve(import.meta.dir, "..");
+const syntaxCache = new SyntaxCache(
+  await createLoader(readFileSync(resolve(root, "tree-sitter/tree-sitter.wasm"))),
+  1,
+);
 
 export interface RunResult {
   text?: string;
@@ -36,8 +45,9 @@ export function makeHost(markup: string) {
   return host;
 }
 
-export function run(markup: string, keys: string, editor = makeEditor()): RunResult {
+export function run(markup: string, keys: string, editor = makeEditor(), lang?: "markdown"): RunResult {
   const host = makeHost(markup);
+  if (lang) editor.syntax = (h) => syntaxCache.get("harness", h.state.doc);
   host.onChanges = (changes) => editor.docChanged(host, changes);
   try {
     editor.feedKeys(host, keys);

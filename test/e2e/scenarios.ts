@@ -437,10 +437,28 @@ const checks: Check[] = [
     },
   },
   {
+    name: "syntax tree: Alt-o, Alt-i, mm and markdown auto-pairs follow Helix",
+    run: () => {
+      setDoc("a **b#[o|]#ld** c\n");
+      keys("<A-o>");
+      expectEq("expand to strong", state().markup, "a #[**bold**|]# c\n");
+      keys("<A-o>");
+      expectEq("expand to inline", state().markup, "#[a **bold** c|]#\n");
+      keys("<A-i>");
+      expectEq("shrink back", state().markup, "a #[**bold**|]# c\n");
+      setDoc("a (b #[c|]# d) e\n");
+      keys("mm");
+      expectEq("mm finds the enclosing pair", state().markup, "a (b c d#[)|]# e\n");
+      setDoc("text\n#[\n|]#");
+      keys("i“<esc>");
+      expectEq("markdown layer pairs smart quotes", state().markup, "text\n“#[|”]#\n");
+    },
+  },
+  {
     name: "unsupported Helix commands report status instead of crashing",
     run: () => {
       setDoc("#[x|]#\n");
-      keys("<A-o>");
+      keys("|");
       const s = state();
       expectTrue("status set", !!s.status && /not available/.test(s.status.message), JSON.stringify(s.status));
     },
@@ -489,11 +507,9 @@ const checks: Check[] = [
   {
     name: "Option dead keys run their Alt binding in normal mode",
     run: () => {
-      setDoc("#[x|]#\n");
+      setDoc("- a\n- #[b|]#\n- c\n");
       sendDomKey({ key: "Dead", code: "KeyN", keyCode: 78, modifiers: 1 });
-      const s = state();
-      expectTrue("A-n reached Helix", !!s.status && /select_next_sibling/.test(s.status.message), JSON.stringify(s.status));
-      expectEq("markup", s.markup, "#[x|]#\n");
+      expectEq("A-n selects the next list item", state().markup, "- a\n- b\n#[- c\n|]#");
     },
   },
   {

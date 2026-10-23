@@ -15,7 +15,8 @@ import { keyFromDom } from "../keys";
 import { search, type TrieNode } from "../keymap/trie";
 import { nextGraphemeBoundary, prevGraphemeBoundary } from "../graphemes";
 import { helixField, helixOwned, historyField, setHelix, syncNativeSelection, toNative } from "../state";
-import { hookInsert, makeAutoPairs } from "../auto-pairs";
+import { hookInsert } from "../auto-pairs";
+import { autoPairsFor, insertDiffers, mayAutoPair } from "../commands/insert";
 import { changeByAndWithSelection } from "../commands/util";
 import { pasteImpl } from "../commands/edit";
 import { exitSelectMode } from "../commands/util";
@@ -270,14 +271,13 @@ export function helixExtension(env: ViewEnv): Extension {
     EditorView.inputHandler.of((view, _from, _to, text) => {
       const value = view.state.field(helixField, false);
       if (!value || value.mode !== "insert" || !editor.helixAutoPairs) return false;
-      const pairs = editor.config.autoPairs;
-      if (!pairs || [...text].length !== 1) return false;
-      const map = makeAutoPairs(pairs);
-      if (!map.has(text) && !/^\p{White_Space}$/u.test(text)) return false;
+      if ([...text].length !== 1 || !mayAutoPair(editor, text)) return false;
+      const host = env.hostFor(view);
+      const map = autoPairsFor(editor, host, insertDiffers(view.state.doc, value.selection.ranges, text));
+      if (!map || (!map.has(text) && !/^\p{White_Space}$/u.test(text))) return false;
       const doc = view.state.doc;
       const touched = value.selection.ranges.some((r) => hookInsert(doc, r, text, map) !== null);
       if (!touched) return false;
-      const host = env.hostFor(view);
       const cx = new Context(editor, host, null, null);
       changeByAndWithSelection(cx, (range) => {
         const hooked = hookInsert(doc, range, text, map);

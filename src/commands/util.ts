@@ -6,11 +6,16 @@ import { helixField, helixOwned, setHelix, toNative, type HelixState, type Mode 
 import { mapPos } from "../core/mapping";
 import { lineEnd, lineIndex, lineStart } from "../core/text";
 import { prevGraphemeBoundary } from "../graphemes";
+import type { Syntax } from "../syntax/syntax";
 
 export type Change = [number, number, string | null];
 
 export function docOf(cx: Context): Text {
   return cx.host.state.doc;
+}
+
+export function syntaxOf(cx: Context): Syntax | null {
+  return cx.editor.syntax?.(cx.host) ?? null;
 }
 
 export function selOf(cx: Context): Selection {

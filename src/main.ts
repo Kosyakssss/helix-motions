@@ -13,6 +13,8 @@ import { makeWorkspace, leafId } from "./obsidian/workspace";
 import { makeViewOps } from "./obsidian/viewops";
 import { renderStatus } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
+import { loadSyntax } from "./obsidian/syntax";
+import type { SyntaxCache } from "./syntax/languages";
 import { SystemClipboard } from "./obsidian/clipboard";
 import { helixField } from "./state";
 import { Registers } from "./registers";
@@ -34,6 +36,7 @@ export default class HelixMotionsPlugin extends Plugin {
   editorExtension: Extension = [];
   private configView: EditorView | null = null;
   private settingTab: HelixSettingTab | null = null;
+  private syntaxCache: SyntaxCache | null = null;
 
   override async onload(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<Settings> | null) };
@@ -64,6 +67,12 @@ export default class HelixMotionsPlugin extends Plugin {
     this.helix.workspace = makeWorkspace(this);
     this.helix.viewOps = makeViewOps(() => this.helix.config.scrolloff);
     this.helix.commentTokens = (host, pos) => commentTokensAt(host.state.doc, pos);
+    void loadSyntax()
+      .then((cache) => {
+        this.syntaxCache = cache;
+        this.helix.syntax = (host) => (host.view && !this.isConfigView(host.view) ? cache.get(host.view, host.state.doc) : null);
+      })
+      .catch((err: unknown) => console.error("Helix: syntax tree unavailable", err));
     this.helix.ui = {
       notify: () => this.refreshStatus(),
       render: (host) => this.refresh(host),
@@ -218,6 +227,7 @@ export default class HelixMotionsPlugin extends Plugin {
 
   override onunload(): void {
     this.statusEl?.remove();
+    this.syntaxCache?.clear();
   }
 
   baseConfig(): Config {

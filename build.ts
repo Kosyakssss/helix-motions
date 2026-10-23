@@ -1,4 +1,4 @@
-import { copyFileSync, mkdirSync, watch } from "node:fs";
+import { copyFileSync, mkdirSync, readFileSync, watch } from "node:fs";
 import { resolve } from "node:path";
 
 const root = import.meta.dir;
@@ -20,6 +20,17 @@ const external = [
   "@lezer/lr",
 ];
 
+const treeSitter: import("bun").BunPlugin = {
+  name: "tree-sitter",
+  setup(builder) {
+    builder.onLoad({ filter: /\.wasm$/ }, async (args) => {
+      const bytes = await Bun.file(args.path).bytes();
+      const packed = Buffer.from(Bun.deflateSync(bytes, { level: 9 })).toString("base64");
+      return { contents: `export default ${JSON.stringify(packed)};`, loader: "js" };
+    });
+  },
+};
+
 async function build(): Promise<boolean> {
   mkdirSync(out, { recursive: true });
   const result = await Bun.build({
@@ -29,6 +40,8 @@ async function build(): Promise<boolean> {
     format: "cjs",
     target: "browser",
     external,
+    plugins: [treeSitter],
+    footer: `/*\n${readFileSync(resolve(root, "tree-sitter/NOTICE"), "utf8").trimEnd()}\n*/`,
     sourcemap: process.argv.includes("--watch") ? "inline" : "none",
     minify: false,
   });

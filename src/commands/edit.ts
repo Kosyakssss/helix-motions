@@ -6,6 +6,7 @@ import { charAt, charIsLineEnding, isLowercase, isUppercase, lineIndex } from ".
 import { indentUnit, indentWidth } from "../config";
 import { getPair } from "../match-brackets";
 import { findMatchingBracketPlaintext } from "../match-brackets";
+import { findMatchingBracketFuzzy } from "../syntax/object";
 import { getSurroundPos, SurroundError } from "../surround";
 import {
   textobjectPairSurround,
@@ -33,6 +34,7 @@ import {
   selOf,
   setModeOnly,
   setSel,
+  syntaxOf,
   type Change,
 } from "./util";
 import { commitHistoryNow, jumplistFor, pushJump } from "./jumps";
@@ -520,7 +522,7 @@ function surroundReplace(cx: Context): void {
     const sel = selOf(cx);
     let changePos: number[];
     try {
-      changePos = getSurroundPos(doc, sel, surroundCh, count);
+      changePos = getSurroundPos(doc, sel, surroundCh, count, syntaxOf(cx));
     } catch (err) {
       cx.editor.setError(err instanceof SurroundError ? err.message : String(err));
       return;
@@ -564,7 +566,7 @@ function surroundDelete(cx: Context): void {
     const doc = docOf(cx);
     let changePos: number[];
     try {
-      changePos = getSurroundPos(doc, selOf(cx), surroundCh, count);
+      changePos = getSurroundPos(doc, selOf(cx), surroundCh, count, syntaxOf(cx));
     } catch (err) {
       cx.editor.setError(err instanceof SurroundError ? err.message : String(err));
       return;
@@ -588,6 +590,7 @@ function selectTextobject(cx: Context, objtype: TextObject): void {
         return;
       }
       if ("tfacTex".includes(ch)) return;
+      const syntax = syntaxOf(cx);
       setSel(
         cx,
         selOf(cx).transform((range) => {
@@ -599,9 +602,9 @@ function selectTextobject(cx: Context, objtype: TextObject): void {
             case "p":
               return textobjectParagraph(doc, range, objtype, count);
             case "m":
-              return textobjectPairSurroundClosest(doc, range, objtype, count);
+              return textobjectPairSurroundClosest(doc, range, objtype, count, syntax);
             default:
-              if (!/^[0-9A-Za-z]$/.test(ch)) return textobjectPairSurround(doc, range, objtype, ch, count);
+              if (!/^[0-9A-Za-z]$/.test(ch)) return textobjectPairSurround(doc, range, objtype, ch, count, syntax);
               return range;
           }
         }),
@@ -612,12 +615,13 @@ function selectTextobject(cx: Context, objtype: TextObject): void {
 
 function matchBrackets(cx: Context): void {
   const doc = docOf(cx);
+  const syntax = syntaxOf(cx);
   const isSelect = modeOf(cx) === "select";
   setSel(
     cx,
     selOf(cx).transform((range) => {
       const pos = range.cursor(doc);
-      const matched = findMatchingBracketPlaintext(doc, pos);
+      const matched = syntax ? findMatchingBracketFuzzy(syntax, doc, pos) : findMatchingBracketPlaintext(doc, pos);
       return matched === null ? range : range.putCursor(doc, matched, isSelect);
     }),
   );

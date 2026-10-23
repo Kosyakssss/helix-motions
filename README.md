@@ -21,7 +21,11 @@ What works:
 - `[editor]`: `scrolloff`, `scroll-lines`, `cursor-shape`, `cursorline`, `auto-pairs`, `auto-info`, `search`, `smart-tab`, `statusline`, `color-modes`, `jump-label-alphabet`, `default-yank-register`, `text-width`, the `trim-*` keys, and more.
 - `line-number`, `gutters` and `indent-guides.render` switch Obsidian's own settings. Relative line numbers are not drawn.
 
-Not available: shell commands (`:sh`, `|`, `!`), LSP, debugging, and commands that need a syntax tree (`Alt-o`, `Alt-i`, `]f` and similar). They show a message instead.
+Not available: shell commands (`:sh`, `|`, `!`), LSP and debugging. They show a message instead.
+
+## Syntax tree
+
+`Alt-o`, `Alt-i`, `Alt-n`, `Alt-p`, `Alt-a`, `Alt-I`, `Alt-e`, `Alt-b`, `mm`, `mim` and auto-pairs use a syntax tree of the note, as in Helix. The plugin parses notes with the same markdown grammars as Helix (`tree-sitter-markdown` and `tree-sitter-markdown-inline`), run by the tree-sitter C library at Helix's version, compiled to WebAssembly. Code inside fences, HTML, YAML front matter and math have no tree of their own; Helix has grammars for those.
 
 ## Helix in Obsidian
 
@@ -45,10 +49,11 @@ Settings that Helix can't decide live in the settings tab: auto-pairs from Helix
 - **Files:** reads and writes `helix.toml` in the vault. `:w`, `:o`, `:move` and similar commands work on notes, as in Helix.
 - **Obsidian settings:** changes "Show line number" and "Show indentation guides" only when `helix.toml` sets `line-number`, `gutters` or `indent-guides`.
 - **Network:** none.
+- **WebAssembly:** `main.js` contains `tree-sitter/tree-sitter.wasm` (compressed): the tree-sitter C library, the two markdown grammars and a small binding (`tree-sitter/binding.c`). `tree-sitter/build.sh` builds it from pinned sources, and CI checks that the result is byte-identical to the committed file. `tree-sitter/NOTICE` has the licenses.
 
 ## Credits
 
-Ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742`, under the Mozilla Public License 2.0. The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
+Ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742`, under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
 
 ## License
 

@@ -6,6 +6,7 @@ export interface Case {
   id: string;
   in: string;
   keys: string;
+  lang?: "markdown";
 }
 
 export interface OracleResult {
@@ -22,7 +23,7 @@ const CACHE = resolve(import.meta.dir, "cache.json");
 const HELIX = process.env.HELIX_DIR ?? resolve(import.meta.dir, "../../../helix");
 
 function key(c: Case): string {
-  return `${c.in}\u0000${c.keys}`;
+  return c.lang ? `${c.in}\u0000${c.keys}\u0000${c.lang}` : `${c.in}\u0000${c.keys}`;
 }
 
 export function loadCache(): Record<string, OracleResult> {
@@ -55,10 +56,10 @@ export async function oracleAsync(cases: Case[]): Promise<Map<string, OracleResu
       const part = unique.map((c, i) => ({ c, i })).filter(({ i }) => i % shards === s);
       const input = join(dir, `in${s}.json`);
       const output = join(dir, `out${s}.json`);
-      writeFileSync(input, JSON.stringify(part.map(({ c, i }) => ({ id: String(i), in: c.in, keys: c.keys }))));
+      writeFileSync(input, JSON.stringify(part.map(({ c, i }) => ({ id: String(i), in: c.in, keys: c.keys, lang: c.lang }))));
       const proc = Bun.spawn([exe, "--test-threads=1", "-q"], {
         cwd: join(HELIX, "helix-term"),
-        env: { ...process.env, ORACLE_IN: input, ORACLE_OUT: output },
+        env: { ...process.env, CARGO_MANIFEST_DIR: join(HELIX, "helix-term"), ORACLE_IN: input, ORACLE_OUT: output },
         stdout: "pipe",
         stderr: "pipe",
       });

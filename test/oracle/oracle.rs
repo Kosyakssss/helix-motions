@@ -35,13 +35,38 @@ mod test {
         })
     }
 
-    async fn run_case(input: &str, keys: &str) -> Value {
+    fn markdown_loader() -> helix_core::syntax::Loader {
+        let mut lang = helix_loader::config::default_lang_config();
+        if let Some(languages) = lang.get_mut("language").and_then(|v| v.as_array_mut()) {
+            languages.retain(|l| {
+                matches!(l.get("name").and_then(|n| n.as_str()), Some("markdown" | "markdown.inline"))
+            });
+            for language in languages.iter_mut() {
+                let table = language.as_table_mut().unwrap();
+                table.insert("language-servers".into(), toml::Value::Array(Vec::new()));
+                if table.contains_key("indent") {
+                    let mut indent = toml::map::Map::new();
+                    indent.insert("tab-width".into(), toml::Value::Integer(4));
+                    indent.insert("unit".into(), toml::Value::String("\t".into()));
+                    table.insert("indent".into(), toml::Value::Table(indent));
+                }
+            }
+        }
+        helix_core::syntax::Loader::new(lang.try_into().unwrap()).unwrap()
+    }
+
+    async fn run_case(input: &str, keys: &str, lang: Option<&str>) -> Value {
         let (text, selection) = test::print(input);
-        let mut app = match AppBuilder::new().build() {
+        let builder = match lang {
+            Some(_) => AppBuilder::new().with_lang_loader(markdown_loader()),
+            None => AppBuilder::new(),
+        };
+        let mut app = match builder.build() {
             Ok(app) => app,
             Err(err) => return json!({ "error": err.to_string() }),
         };
         {
+            let loader = app.editor.syn_loader.load_full();
             let (view, doc) = current!(app.editor);
             let sel = doc.selection(view.id).clone();
             let transaction = helix_core::Transaction::change_by_selection(doc.text(), &sel, |_| {
@@ -50,6 +75,14 @@ mod test {
             .with_selection(selection);
             doc.apply(&transaction, view.id);
             doc.append_changes_to_history(view);
+            if let Some(lang) = lang {
+                if let Err(err) = doc.set_language_by_language_id(lang, &loader) {
+                    return json!({ "error": err.to_string() });
+                }
+                if doc.syntax().is_none() {
+                    return json!({ "error": "no syntax" });
+                }
+            }
         }
         let captured = std::cell::RefCell::new(Value::Null);
         let outcome = test_key_sequence(
@@ -82,17 +115,21 @@ mod test {
         for case in cases {
             let input = case["in"].as_str().unwrap_or_default().to_string();
             let keys = case["keys"].as_str().unwrap_or_default().to_string();
-            let handle = std::thread::spawn(move || {
-                let rt = tokio::runtime::Builder::new_multi_thread()
-                    .enable_all()
-                    .build()
-                    .unwrap();
-                rt.block_on(run_case(&input, &keys))
+            let lang = case["lang"].as_str().map(str::to_string);
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::spawn(move || {
+                let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    let rt = tokio::runtime::Builder::new_multi_thread()
+                        .enable_all()
+                        .build()
+                        .unwrap();
+                    rt.block_on(run_case(&input, &keys, lang.as_deref()))
+                }));
+                let _ = tx.send(outcome.unwrap_or_else(|_| json!({ "error": "panic" })));
             });
-            let mut result = match handle.join() {
-                Ok(v) => v,
-                Err(_) => json!({ "error": "panic" }),
-            };
+            let mut result = rx
+                .recv_timeout(std::time::Duration::from_secs(10))
+                .unwrap_or_else(|_| json!({ "error": "timeout" }));
             result["id"] = case["id"].clone();
             results.push(result);
         }

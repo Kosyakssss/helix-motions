@@ -12,14 +12,15 @@ bun run build        # into test-vault/.obsidian/plugins/helix-motions
 bun run dev          # rebuild on change and reload the plugin
 bun run check        # TypeScript
 bun run lint         # Obsidian's review rules
+sh tree-sitter/build.sh  # rebuild tree-sitter.wasm (downloads wasi-sdk once)
 ```
 
 Open `test-vault` in Obsidian to try changes. Its `helix.toml` is a real-world config.
 
 ## Tests
 
-- `sh test/oracle/setup.sh` puts Helix next to this repo with the oracle test. Then `bun test` compares the headless engine with real Helix on about 18,000 cases.
-- `bun test/oracle/diff.ts hand|fuzz [filter]` lists failures in a readable form.
+- `sh test/oracle/setup.sh` puts Helix next to this repo with the oracle test and the markdown grammars. Then `bun test` compares the headless engine with real Helix: plain text, and markdown with its syntax tree.
+- `bun test/oracle/diff.ts hand|fuzz|md|mdfuzz [filter]` lists failures in a readable form.
 - With Obsidian running and `test-vault` open, `bun test/e2e/scenarios.ts` drives Obsidian with real key events. It only uses `scratch.md`.
 
 See `docs/testing.md` for details.

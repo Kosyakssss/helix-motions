@@ -58,3 +58,44 @@ export function fuzzSuite(n: number, seed: number): Case[] {
   }
   return cases;
 }
+
+const MD_LINES = [
+  "# ", "## ", "- ", "  - ", "1. ", "> ", "- [ ] ", "| a | b |", "|---|---|", "```", "```md", "```js", "---", "***", "    ", "",
+];
+const MD_WORDS = [
+  "foo", "bar", "*it*", "**bold**", "_u_", "`code`", "[a](b)", "[[wiki]]", "(", ")", "[", "]", "{", "}", "\"", "'", "‘", "’",
+  "“", "”", "«", "»", "x", "  ", "<b>", "</b>", "$m$", "~~s~~", "café", "мир", "👋🏽", "\\*", "#tag", "a.b", ",", "|",
+];
+const MD_KEYS = [
+  "<A-o>", "<A-i>", "<A-n>", "<A-p>", "<A-a>", "<A-I>", "<A-e>", "<A-b>", "v<A-e>", "v<A-b>", "mm", "mim", "mam", "mi(", "ma\"",
+  "md(", "mdm", "mr([", "mrm'", "]f", "[f", "i‘<esc>", "i“<esc>", "i(<esc>", "i`<esc>", "i\"<esc>", "i<backspace><esc>",
+  "w", "b", "e", "x", "j", "k", "l", "h", "%", ";", "d", "c<esc>", "u", "<A-.>", "v", "<esc>", "2", "o<esc>", "yp", "J",
+];
+
+export function markdownFuzzSuite(n: number, seed: number): Case[] {
+  const r = rng(seed);
+  const pick = <T>(xs: readonly T[]) => xs[Math.floor(r() * xs.length)]!;
+  const cases: Case[] = [];
+  for (let i = 0; i < n; i++) {
+    const lines: string[] = [];
+    const lineCount = 1 + Math.floor(r() * 6);
+    for (let l = 0; l < lineCount; l++) {
+      const wc = Math.floor(r() * 5);
+      const parts: string[] = [];
+      for (let w = 0; w < wc; w++) parts.push(pick(MD_WORDS));
+      lines.push(pick(MD_LINES) + parts.join(r() < 0.7 ? " " : ""));
+    }
+    let text = lines.join("\n");
+    if (r() < 0.85) text += "\n";
+    const chars = [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(text)].map((g) => g.segment);
+    const at = Math.floor(r() * Math.max(1, chars.length));
+    const g = chars[at];
+    const markup = g === undefined ? text + "#[|]#" : chars.slice(0, at).join("") + "#[" + g + "|]#" + chars.slice(at + 1).join("");
+    if (/#\[|\]#|#\(|\)#/.test(text)) continue;
+    const kc = 1 + Math.floor(r() * 4);
+    let keys = "";
+    for (let k = 0; k < kc; k++) keys += pick(MD_KEYS);
+    cases.push({ id: `mdfuzz${seed}-${i}`, in: markup, keys, lang: "markdown" });
+  }
+  return cases;
+}

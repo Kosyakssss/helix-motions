@@ -10,6 +10,8 @@ import { completeCommandLine, executeCommandLine } from "../commands/typed";
 import { setSel } from "../commands/util";
 import { getOption, setOption, toggleOption } from "./options";
 import { runComments, type CommentTokens } from "../commands/comments";
+import type { Syntax } from "../syntax/syntax";
+import type { Selection } from "../selection";
 
 export type OnKeyCallback = (cx: Context, key: string) => void;
 export type OnKeyKind = "pseudoPending" | "fallback";
@@ -104,10 +106,12 @@ export class HelixEditor {
   continueLists = false;
   jumpLabels = new Map<string, JumpLabel[]>();
   commentTokens: ((host: Host, pos: number) => CommentTokens) | null = null;
+  syntax: ((host: Host) => Syntax | null) | null = null;
   onConfigChanged: (() => void) | null = null;
   replayKeyHook: ((host: Host, key: string) => boolean) | null = null;
   onNextKeyCleanup: (() => void)[] = [];
   private jumplists = new Map<string, JumpList>();
+  private objectSelectionStacks = new Map<string, Selection[]>();
 
   constructor(keymaps: Keymaps, config: Config = defaultConfig()) {
     this.keymaps = keymaps;
@@ -147,6 +151,15 @@ export class HelixEditor {
 
   autoinfoRegisters(title: string): void {
     this.autoinfo = { title, body: this.registers.preview() };
+  }
+
+  objectSelections(host: Host): Selection[] {
+    let stack = this.objectSelectionStacks.get(host.paneId);
+    if (!stack) {
+      stack = [];
+      this.objectSelectionStacks.set(host.paneId, stack);
+    }
+    return stack;
   }
 
   jumplist(host: Host): JumpList {
