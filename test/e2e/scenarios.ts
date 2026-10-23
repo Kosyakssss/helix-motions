@@ -446,6 +446,29 @@ const checks: Check[] = [
     },
   },
   {
+    name: "unresolved links act as diagnostics; space a opens the command palette",
+    run: () => {
+      setDoc("#[s|]#ee [[Welcome]] and [[nowhere]] then ![[ghost.png]] end\n");
+      for (let i = 0; i < 30; i++) {
+        Bun.sleepSync(200);
+        if (evalJs<number>(`JSON.stringify(Object.keys(app.metadataCache.unresolvedLinks["scratch.md"] ?? {}).length)`) >= 2) break;
+      }
+      keys("]d");
+      expectEq("next", state().markup, "see [[Welcome]] and #[[[nowhere]]|]# then ![[ghost.png]] end\n");
+      keys("]D");
+      expectEq("last", state().markup, "see [[Welcome]] and [[nowhere]] then #[![[ghost.png]]|]# end\n");
+      keys("[d");
+      expectEq("prev", state().markup, "see [[Welcome]] and #[[[nowhere]]|]# then ![[ghost.png]] end\n");
+      keys("<space>d");
+      Bun.sleepSync(200);
+      expectEq("picker", evalJs(`JSON.stringify([...document.querySelectorAll(".suggestion-item")].map(e=>e.innerText))`), ["1: nowhere", "1: ghost.png"]);
+      keys("<esc><space>a");
+      Bun.sleepSync(200);
+      expectEq("palette", evalJs(`JSON.stringify(document.querySelector(".prompt-input")?.placeholder ?? null)`), "Select a command...");
+      keys("<esc>");
+    },
+  },
+  {
     name: "Option dead keys run their Alt binding in normal mode",
     run: () => {
       setDoc("#[x|]#\n");

@@ -3,6 +3,7 @@ import {
   MarkdownView,
   Notice,
   TFile,
+  getLinkpath,
   normalizePath,
   type App,
   type WorkspaceLeaf,
@@ -14,6 +15,7 @@ import { setSel, docOf, selOf } from "../commands/util";
 import { pushJump } from "../commands/jumps";
 import { gotoLineWithoutJumplist } from "../commands/motion";
 import { charAt, charBefore } from "../core/text";
+import { Range, Selection } from "../selection";
 
 interface PluginLike {
   app: App;
@@ -78,6 +80,32 @@ function linkUnderCursor(cx: Context): { kind: "wiki" | "md" | "url"; target: st
   const word = doc.sliceString(s, e);
   if (/^https?:\/\//.test(word)) return { kind: "url", target: word };
   return word ? { kind: "wiki", target: word } : null;
+}
+
+interface Unresolved {
+  from: number;
+  to: number;
+  line: number;
+  target: string;
+}
+
+function unresolvedIn(app: App, file: TFile): Unresolved[] {
+  const cache = app.metadataCache.getFileCache(file);
+  const refs = [...(cache?.links ?? []), ...(cache?.embeds ?? [])];
+  return refs
+    .filter((ref) => app.metadataCache.getFirstLinkpathDest(getLinkpath(ref.link), file.path) === null)
+    .map((ref) => ({ from: ref.position.start.offset, to: ref.position.end.offset, line: ref.position.start.line + 1, target: ref.link }))
+    .sort((a, b) => a.from - b.from);
+}
+
+async function openAt(app: App, file: TFile, from: number, to: number): Promise<void> {
+  const leaf = app.workspace.getLeaf(false);
+  await leaf.openFile(file);
+  if (!(leaf.view instanceof MarkdownView)) return;
+  const editor = leaf.view.editor;
+  editor.setSelection(editor.offsetToPos(from), editor.offsetToPos(to));
+  editor.scrollIntoView({ from: editor.offsetToPos(from), to: editor.offsetToPos(to) }, true);
+  editor.focus();
 }
 
 export function makeWorkspace(plugin: PluginLike): Workspace {
@@ -240,8 +268,59 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
         return;
       }
       case "command_palette":
+      case "code_action":
         cmd("command-palette:open");
         return;
+      case "diagnostics_picker": {
+        const file = fileOf(cx);
+        if (!file) return;
+        const items = unresolvedIn(app, file).map((u) => ({
+          label: `${u.line}: ${u.target}`,
+          run: () => {
+            const doc = cx.host.state.doc;
+            const from = Math.min(u.from, doc.length);
+            pushJump(cx);
+            setSel(cx, new Selection([new Range(from, Math.min(u.to, doc.length))], 0).ensureInvariants(doc));
+            (cx.host.view as EditorView | null)?.focus();
+          },
+        }));
+        picker(() => new ListModal(app, items, "Unresolved links").open());
+        return;
+      }
+      case "workspace_diagnostics_picker": {
+        const items: Item[] = [];
+        for (const path of Object.keys(app.metadataCache.unresolvedLinks)) {
+          const file = app.vault.getFileByPath(path);
+          if (!file) continue;
+          for (const u of unresolvedIn(app, file)) {
+            items.push({ label: `${file.path}:${u.line}  ${u.target}`, run: () => void openAt(app, file, u.from, u.to) });
+          }
+        }
+        picker(() => new ListModal(app, items, "Unresolved links in vault").open());
+        return;
+      }
+      case "goto_first_diag":
+      case "goto_last_diag":
+      case "goto_next_diag":
+      case "goto_prev_diag": {
+        const file = fileOf(cx);
+        if (!file) return;
+        const list = unresolvedIn(app, file);
+        const doc = cx.host.state.doc;
+        const cursor = selOf(cx).primary().cursor(doc);
+        const found =
+          name === "goto_first_diag"
+            ? list[0]
+            : name === "goto_last_diag"
+              ? list[list.length - 1]
+              : name === "goto_next_diag"
+                ? list.find((u) => u.from > cursor)
+                : [...list].reverse().find((u) => u.to < cursor);
+        if (!found) return;
+        pushJump(cx);
+        setSel(cx, new Selection([new Range(Math.min(found.from, doc.length), Math.min(found.to, doc.length))], 0).ensureInvariants(doc));
+        return;
+      }
       case "global_search": {
         const query = cx.editor.registers.first("/", cx.editor.registerEnv(cx.host)) ?? "";
         const search = (app as unknown as { internalPlugins: { getPluginById(id: string): { instance?: { openGlobalSearch(q: string): void } } | null } }).internalPlugins.getPluginById("global-search");
