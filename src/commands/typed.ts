@@ -1,3 +1,4 @@
+import type { Completion } from "../core/prompt";
 import type { Context } from "../core/editor";
 import { nextGraphemeBoundary } from "../graphemes";
 import { parseUndoKind } from "../history";
@@ -26,21 +27,42 @@ export interface Args {
   raw: string;
 }
 
-export function tokenize(input: string): string[] {
-  const out: string[] = [];
+interface Token {
+  start: number;
+  contentStart: number;
+  content: string;
+  quote: string | null;
+  terminated: boolean;
+}
+
+function scanTokens(input: string): Token[] {
+  const out: Token[] = [];
   let i = 0;
   while (i < input.length) {
     while (i < input.length && /\s/.test(input[i]!)) i++;
     if (i >= input.length) break;
+    const start = i;
     const q = input[i]!;
     if (q === "'" || q === '"' || q === "`") {
-      const end = input.indexOf(q, i + 1);
-      if (end < 0) {
-        out.push(input.slice(i + 1));
-        break;
+      let content = "";
+      let j = i + 1;
+      let terminated = false;
+      while (j < input.length) {
+        if (input[j] === q) {
+          if (input[j + 1] === q) {
+            content += q;
+            j += 2;
+            continue;
+          }
+          terminated = true;
+          j++;
+          break;
+        }
+        content += input[j];
+        j++;
       }
-      out.push(input.slice(i + 1, end));
-      i = end + 1;
+      out.push({ start, contentStart: start + 1, content, quote: q, terminated });
+      i = j;
       continue;
     }
     let tok = "";
@@ -53,9 +75,13 @@ export function tokenize(input: string): string[] {
       tok += input[i];
       i++;
     }
-    out.push(tok);
+    out.push({ start, contentStart: start, content: tok, quote: null, terminated: false });
   }
   return out;
+}
+
+export function tokenize(input: string): string[] {
+  return scanTokens(input).map((t) => t.content);
 }
 
 function parseArgs(raw: string, cmd: TypableCommand): Args {
@@ -367,20 +393,40 @@ export function setPathCompleter(fn: ((prefix: string) => string[]) | null): voi
   pathCompleter = fn;
 }
 
-export function completeCommandLine(input: string): string[] {
+function quoteCompletion(token: Token, candidate: string): Completion {
+  if (token.quote === null) {
+    const text = /[ \t%]/.test(candidate) ? `'${candidate.replace(/'/g, "''")}'` : candidate;
+    return { start: token.start, text, label: candidate };
+  }
+  return { start: token.contentStart, text: candidate.split(token.quote).join(token.quote + token.quote), label: candidate };
+}
+
+export function completeCommandLine(input: string): Completion[] {
   const [command, rest] = splitCommandLine(input);
   if (rest !== "" || input.endsWith(" ")) {
     const cmd = TYPABLE_MAP.get(command);
     if (!cmd) return [];
-    const last = rest.split(/\s+/).pop() ?? "";
-    if (PATH_COMMANDS.has(cmd.name) && pathCompleter) return pathCompleter(last).slice(0, 200);
-    if (OPTION_COMMANDS.has(cmd.name) && !/\s/.test(rest.trim())) return Object.keys(OPTIONS).filter((k) => k.startsWith(last)).sort();
+    const tokens = scanTokens(input).slice(1);
+    let token = tokens[tokens.length - 1];
+    if (!token || (token.quote === null && /\s$/.test(input)) || token.terminated) {
+      if (token?.terminated) return [];
+      token = { start: input.length, contentStart: input.length, content: "", quote: null, terminated: false };
+    }
+    const tok = token;
+    if (PATH_COMMANDS.has(cmd.name) && pathCompleter) return pathCompleter(tok.content).slice(0, 200).map((c) => quoteCompletion(tok, c));
+    if (OPTION_COMMANDS.has(cmd.name) && tokens.length <= 1) {
+      return Object.keys(OPTIONS)
+        .filter((k) => k.startsWith(tok.content))
+        .sort()
+        .map((k) => ({ start: tok.start, text: k, label: k }));
+    }
     return [];
   }
+  const start = input.length - input.replace(/^\s+/, "").length;
   const names = new Set<string>();
   for (const cmd of TYPABLE) {
     if (cmd.name.startsWith(command)) names.add(cmd.name);
     for (const a of cmd.aliases) if (a.startsWith(command)) names.add(cmd.name);
   }
-  return [...names].sort();
+  return [...names].sort().map((n) => ({ start, text: n, label: n }));
 }

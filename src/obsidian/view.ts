@@ -67,6 +67,17 @@ class LabelWidget extends WidgetType {
   }
 }
 
+function endComposition(view: EditorView): void {
+  const input = (view as unknown as { inputState?: { composing: number; compositionFirstChange: boolean | null } }).inputState;
+  if (input && input.composing >= 0) {
+    input.composing = -1;
+    input.compositionFirstChange = null;
+  }
+  const dom = view.contentDOM;
+  dom.blur();
+  dom.focus({ preventScroll: true });
+}
+
 function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
   const state = view.state;
   const value = state.field(helixField, false);
@@ -187,35 +198,68 @@ const OBSIDIAN_INSERT_KEYS = new Set(["ret", "tab", "S-tab", "backspace", "S-bac
 export function helixExtension(env: ViewEnv): Extension {
   const { editor } = env;
 
+  const onKey = (event: KeyboardEvent, view: EditorView): boolean => {
+    if (event.metaKey) return false;
+    const host = env.hostFor(view);
+    const value = view.state.field(helixField, false);
+    if (!value) return false;
+    const mode = value.mode;
+    if (mode === "insert" && env.suggestOpen() && !editor.activePrompt) return false;
+    const dead = event.key === "Dead";
+    if (dead && mode === "insert" && !editor.activePrompt) return false;
+    const literal = literalWanted(editor, mode);
+    let key = keyFromDom(event, literal);
+    if (key === null) return false;
+    if (mode === "insert" && !editor.activePrompt && editor.onNextKeyState === null && (event.altKey || event.ctrlKey)) {
+      const physical = keyFromDom(event, false);
+      if (physical && physical !== key && pendingNode(editor, "insert").map.has(physical)) key = physical;
+    }
+    const consumed = editor.handleKey(host, key, {
+      nativeInsert: true,
+      passThrough: (k) => !env.insertKeysHelix() && OBSIDIAN_INSERT_KEYS.has(k),
+    });
+    if (!consumed && !dead) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    return true;
+  };
+
   const keyHandler = Prec.highest(
     EditorView.domEventHandlers({
-      keydown(event, view) {
-        if (event.isComposing || event.keyCode === 229) return false;
-        if (event.metaKey) return false;
-        const host = env.hostFor(view);
+      compositionstart(_event, view) {
         const value = view.state.field(helixField, false);
-        if (!value) return false;
-        const mode = value.mode;
-        if (mode === "insert" && env.suggestOpen() && !editor.activePrompt) return false;
-        const literal = literalWanted(editor, mode);
-        let key = keyFromDom(event, literal);
-        if (key === null) return false;
-        if (mode === "insert" && !editor.activePrompt && editor.onNextKeyState === null && (event.altKey || event.ctrlKey)) {
-          const physical = keyFromDom(event, false);
-          if (physical && physical !== key && pendingNode(editor, "insert").map.has(physical)) key = physical;
+        if (!value || value.mode === "insert" || editor.activePrompt) return false;
+        endComposition(view);
+        return true;
+      },
+      keydown(event, view) {
+        if (event.isComposing || event.keyCode === 229) {
+          const value = view.state.field(helixField, false);
+          if (!value || (value.mode === "insert" && !editor.activePrompt)) return false;
+          endComposition(view);
         }
-        const consumed = editor.handleKey(host, key, {
-          nativeInsert: true,
-          passThrough: (k) => !env.insertKeysHelix() && OBSIDIAN_INSERT_KEYS.has(k),
-        });
-        if (consumed) {
-          event.preventDefault();
-          event.stopPropagation();
-          return true;
-        }
-        return false;
+        return onKey(event, view);
       },
     }),
+  );
+
+  const stuckComposition = ViewPlugin.fromClass(
+    class {
+      constructor(readonly view: EditorView) {
+        view.contentDOM.addEventListener("keydown", this.listener, true);
+      }
+      listener = (event: KeyboardEvent) => {
+        const view = this.view;
+        if (!view.composing) return;
+        const value = view.state.field(helixField, false);
+        if (!value || (value.mode === "insert" && !editor.activePrompt)) return;
+        endComposition(view);
+        onKey(event, view);
+      };
+      destroy() {
+        this.view.contentDOM.removeEventListener("keydown", this.listener, true);
+      }
+    },
   );
 
   const autoPairsInput = Prec.highest(
@@ -330,6 +374,7 @@ export function helixExtension(env: ViewEnv): Extension {
     historyField,
     syncNativeSelection,
     keyHandler,
+    stuckComposition,
     pasteHandler,
     autoPairsInput,
     decorations,
@@ -366,7 +411,7 @@ function renderPanel(view: EditorView, env: ViewEnv, info: HTMLElement, prompt: 
       active.completions.slice(0, 40).forEach((c, i) => {
         const item = document.createElement("span");
         item.className = i === active.selection ? "hx-completion hx-completion-selected" : "hx-completion";
-        item.textContent = c;
+        item.textContent = c.label;
         list.append(item);
       });
       prompt.prepend(list);

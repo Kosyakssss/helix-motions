@@ -5,5 +5,5 @@
   "minAppVersion": "1.8.0",
   "description": "The Helix editing model for Obsidian.",
   "author": "Kote",
-  "isDesktopOnly": false
+  "isDesktopOnly": true
 }

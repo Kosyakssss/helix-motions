@@ -227,6 +227,10 @@ export function keyFromDom(e: DomKeyLike, literal: boolean): string | null {
     code = named;
   } else if (/^F([1-9]|1[0-9]|2[0-4])$/.test(e.key)) {
     code = e.key;
+  } else if (e.key === "Dead") {
+    const physical = physicalChar(e.code, e.shiftKey);
+    if (physical === null) return null;
+    code = physical;
   } else if ([...e.key].length === 1) {
     code = e.key;
     const nonAscii = e.key.charCodeAt(0) > 127;

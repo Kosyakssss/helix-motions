@@ -4,7 +4,7 @@ import { MemoryClipboard, Registers, type RegisterEnv } from "../registers";
 import { defaultConfig, type Config } from "../config";
 import { doc, mode, selection, type Host } from "./host";
 import { executeCommand, runTypable, STATIC_COMMANDS } from "../commands";
-import { Prompt } from "./prompt";
+import { Prompt, type Completion } from "./prompt";
 import { commitHistoryNow, JumpList, type Jump } from "../commands/jumps";
 import { completeCommandLine, executeCommandLine } from "../commands/typed";
 import { setSel } from "../commands/util";
@@ -47,7 +47,7 @@ export interface PromptRequest {
   label: string;
   initial?: string;
   history?: string;
-  complete?: (input: string) => string[];
+  complete?: (input: string) => Completion[];
   onChange?: (input: string) => void;
   onAccept: (input: string) => void;
   onCancel?: () => void;

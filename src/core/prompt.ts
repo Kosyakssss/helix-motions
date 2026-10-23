@@ -10,10 +10,16 @@ function isWordChar(g: string): boolean {
   return /^[\p{Alphabetic}\p{Nd}_]/u.test(g);
 }
 
+export interface Completion {
+  start: number;
+  text: string;
+  label: string;
+}
+
 export class Prompt {
   line: string;
   cursor: number;
-  completions: string[] = [];
+  completions: Completion[] = [];
   selection: number | null = null;
   historyPos: number | null = null;
   private nextCharHandler: ((ch: string) => void) | null = null;
@@ -95,8 +101,7 @@ export class Prompt {
     if (this.selection === null) this.selection = backward ? n - 1 : 0;
     else this.selection = backward ? (this.selection + n - 1) % n : (this.selection + 1) % n;
     const item = this.completions[this.selection]!;
-    const space = this.line.lastIndexOf(" ");
-    this.line = space < 0 ? item : this.line.slice(0, space + 1) + item;
+    this.line = this.line.slice(0, item.start) + item.text;
     this.cursor = this.line.length;
     this.request.onChange?.(this.line);
   }
