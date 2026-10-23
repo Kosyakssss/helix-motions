@@ -16,7 +16,6 @@ const IGNORED_EDITOR = new Set([
   "mouse",
   "middle-click-paste",
   "shell",
-  "gutters",
   "auto-completion",
   "path-completion",
   "auto-format",
@@ -45,7 +44,6 @@ const IGNORED_EDITOR = new Set([
   "file-explorer",
   "buffer-picker",
   "auto-save",
-  "indent-guides",
   "soft-wrap",
   "inline-diagnostics",
   "word-completion",
@@ -142,7 +140,20 @@ function applyEditor(config: Config, editor: Record<string, unknown>, warnings: 
       case "line-number":
         if (value === "absolute" || value === "relative") config.lineNumber = value;
         else warnings.push(`editor.line-number: expected "absolute" or "relative"`);
+        if (value === "relative") warnings.push("editor.line-number: relative numbers are not drawn; Obsidian shows absolute line numbers");
         break;
+      case "gutters": {
+        const layout = Array.isArray(value) ? value : (value as Record<string, unknown> | null)?.layout;
+        if (Array.isArray(layout)) config.gutterLineNumbers = layout.includes("line-numbers");
+        else if (value && typeof value === "object" && !Array.isArray(value)) break;
+        else warnings.push("editor.gutters: expected a list or a table with layout");
+        break;
+      }
+      case "indent-guides": {
+        const render = (value as Record<string, unknown> | null)?.render;
+        if (typeof render === "boolean") config.indentGuides = render;
+        break;
+      }
       case "auto-pairs":
         if (value === false) config.autoPairs = false;
         else if (value === true) break;
@@ -178,14 +189,9 @@ function applyEditor(config: Config, editor: Record<string, unknown>, warnings: 
         }
         break;
       }
-      case "whitespace": {
-        const s = value as Record<string, unknown>;
-        const render = s?.render;
-        if (render === "all") config.whitespaceRender = true;
-        else if (render === "none") config.whitespaceRender = false;
-        else if (render !== undefined) warnings.push("editor.whitespace.render: only all or none are supported");
+      case "whitespace":
+        warnings.push("editor.whitespace: not drawn; Obsidian shows its own indentation guides");
         break;
-      }
       case "statusline": {
         const s = value as Record<string, unknown>;
         for (const [k, v] of Object.entries(s ?? {})) {

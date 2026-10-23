@@ -25,9 +25,10 @@ export interface Config {
   search: { smartCase: boolean; wrapAround: boolean };
   cursorShape: { normal: string; insert: string; select: string };
   colorModes: boolean;
-  lineNumber: "absolute" | "relative";
+  lineNumber: "absolute" | "relative" | null;
+  gutterLineNumbers: boolean | null;
+  indentGuides: boolean | null;
   cursorline: boolean;
-  whitespaceRender: boolean;
   trimTrailingWhitespace: boolean;
   trimFinalNewlines: boolean;
   insertFinalNewline: boolean;
@@ -60,9 +61,10 @@ export function defaultConfig(): Config {
     search: { smartCase: true, wrapAround: true },
     cursorShape: { normal: "block", insert: "block", select: "block" },
     colorModes: false,
-    lineNumber: "absolute",
+    lineNumber: null,
+    gutterLineNumbers: null,
+    indentGuides: null,
     cursorline: false,
-    whitespaceRender: false,
     trimTrailingWhitespace: false,
     trimFinalNewlines: false,
     insertFinalNewline: true,

@@ -28,7 +28,7 @@ export const OPTIONS: Record<string, [Getter, Setter]> = {
   cursorline: [(c) => c.cursorline, (c, v) => (c.cursorline = bool(v))],
   "continue-comments": [(c) => c.continueComments, (c, v) => (c.continueComments = bool(v))],
   "line-number": [
-    (c) => c.lineNumber,
+    (c) => c.lineNumber ?? "absolute",
     (c, v) => {
       if (v !== "absolute" && v !== "relative") throw new Error("invalid line-number");
       c.lineNumber = v;
@@ -47,7 +47,7 @@ export const OPTIONS: Record<string, [Getter, Setter]> = {
     (c) => c.jumpLabelAlphabet.join(""),
     (c, v) => (c.jumpLabelAlphabet = [...String(v)]),
   ],
-  "whitespace.render": [(c) => (c.whitespaceRender ? "all" : "none"), (c, v) => (c.whitespaceRender = v === "all")],
+  "indent-guides.render": [(c) => c.indentGuides ?? true, (c, v) => (c.indentGuides = bool(v))],
 };
 
 function parseValue(raw: string): unknown {

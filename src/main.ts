@@ -6,8 +6,8 @@ import type { Host } from "./core/host";
 import { buildKeymaps } from "./keymap";
 import { loadConfig } from "./config-loader";
 import { defaultConfig, type Config } from "./config";
-import { helixExtension, whitespaceCompartment } from "./obsidian/view";
-import { highlightWhitespace, runScopeHandlers } from "@codemirror/view";
+import { helixExtension } from "./obsidian/view";
+import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
 import { makeViewOps } from "./obsidian/viewops";
@@ -50,6 +50,10 @@ export default class HelixMotionsPlugin extends Plugin {
       return;
     }
     this.helix = new HelixEditor(buildKeymaps(), this.baseConfig());
+    this.helix.onConfigChanged = () => {
+      this.applyViewConfig();
+      this.refreshStatus();
+    };
     this.helix.visualLines = true;
     this.helix.continueLists = true;
     this.helix.helixAutoPairs = this.settings.autoPairs === "helix";
@@ -194,6 +198,7 @@ export default class HelixMotionsPlugin extends Plugin {
         const loaded = loadConfig(source, this.baseConfig());
         this.helix.config = loaded.config;
         this.helix.keymaps = buildKeymaps(loaded.keys);
+        this.applyViewConfig();
       }
       return true;
     },
@@ -239,11 +244,15 @@ export default class HelixMotionsPlugin extends Plugin {
   }
 
   applyViewConfig(): void {
-    this.app.workspace.iterateAllLeaves((leaf) => {
-      if (!(leaf.view instanceof MarkdownView)) return;
-      const cm = (leaf.view.editor as unknown as { cm: EditorView }).cm;
-      cm.dispatch({ effects: whitespaceCompartment.reconfigure(this.helix.config.whitespaceRender ? highlightWhitespace() : []) });
-    });
+    const config = this.helix.config;
+    const lineNumbers = config.gutterLineNumbers ?? (config.lineNumber !== null ? true : null);
+    if (lineNumbers !== null) this.setObsidianOption("showLineNumber", lineNumbers);
+    if (config.indentGuides !== null) this.setObsidianOption("showIndentGuide", config.indentGuides);
+  }
+
+  setObsidianOption(key: string, value: boolean): void {
+    const vault = this.app.vault as unknown as { getConfig(key: string): unknown; setConfig(key: string, value: unknown): void };
+    if (vault.getConfig(key) !== value) vault.setConfig(key, value);
   }
 
   hostForView(view: EditorView): Host {

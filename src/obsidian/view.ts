@@ -1,10 +1,7 @@
-import { Compartment, Prec, RangeSet, RangeSetBuilder, StateField, type Extension } from "@codemirror/state";
+import { Prec, RangeSetBuilder, type Extension } from "@codemirror/state";
 import {
   Decoration,
   EditorView,
-  GutterMarker,
-  highlightWhitespace,
-  lineNumberMarkers,
   ViewPlugin,
   WidgetType,
   showPanel,
@@ -16,7 +13,7 @@ import type { HelixEditor } from "../core/editor";
 import type { Host } from "../core/host";
 import { keyFromDom } from "../keys";
 import { search, type TrieNode } from "../keymap/trie";
-import { nextGraphemeBoundary } from "../graphemes";
+import { nextGraphemeBoundary, prevGraphemeBoundary } from "../graphemes";
 import { helixField, helixOwned, historyField, setHelix, syncNativeSelection, toNative } from "../state";
 import { hookInsert, makeAutoPairs } from "../auto-pairs";
 import { changeByAndWithSelection } from "../commands/util";
@@ -60,10 +57,9 @@ class LabelWidget extends WidgetType {
     return other.text === this.text;
   }
   toDOM(): HTMLElement {
-    const span = document.createElement("span");
-    span.className = "hx-jump-label";
-    span.textContent = this.text;
-    return span;
+    const anchor = createSpan({ cls: "hx-jump-anchor", text: "\u200b" });
+    anchor.createSpan({ cls: "hx-jump-label", text: this.text });
+    return anchor;
   }
 }
 
@@ -103,19 +99,29 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
   const visible = view.visibleRanges;
   const vFrom = visible.length > 0 ? visible[0]!.from : 0;
   const vTo = visible.length > 0 ? visible[visible.length - 1]!.to : doc.length;
+  const block = shape === "block";
   value.selection.ranges.forEach((range, i) => {
     if (range.to() < vFrom || range.from() > vTo) return;
     const primary = i === value.selection.primaryIndex;
-    if (range.to() > range.from()) {
-      builder.push({
-        from: Math.max(range.from(), vFrom),
-        to: Math.min(range.to(), vTo),
-        deco: Decoration.mark({ class: primary ? "hx-sel hx-sel-primary" : "hx-sel" }),
-      });
+    if (value.mode === "insert") {
+      const r = range.minWidth1(doc);
+      let from: number;
+      let to: number;
+      if (r.head > r.anchor) {
+        from = r.anchor;
+        to = prevGraphemeBoundary(doc, r.head);
+      } else {
+        const cursorEnd = nextGraphemeBoundary(doc, r.head);
+        from = primary && !block && cursorEnd !== r.anchor ? r.head : cursorEnd;
+        to = r.anchor;
+      }
+      if (to > from) {
+        builder.push({ from: Math.max(from, vFrom), to: Math.min(to, vTo), deco: Decoration.mark({ class: "hx-sel" }) });
+      }
     }
-    if (value.mode === "insert" && shape === "bar" && primary) return;
+    if (value.mode === "insert" && primary && shape === "bar") return;
     const cursor = range.cursor(doc);
-    const cls = `hx-cursor hx-cursor-${shape}${primary ? " hx-cursor-primary" : ""}`;
+    const cls = `hx-cursor hx-cursor-${primary ? shape : "block"}${primary ? " hx-cursor-primary" : ""}`;
     const line = doc.lineAt(cursor);
     if (cursor >= doc.length || cursor === line.to) {
       builder.push({ from: cursor, to: cursor, deco: Decoration.widget({ widget: new EolCursor(`${cls} hx-eol`), side: 1 }) });
@@ -123,12 +129,22 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
       builder.push({ from: cursor, to: nextGraphemeBoundary(doc, cursor), deco: Decoration.mark({ class: cls }) });
     }
   });
-  const labels = env.editor.jumpLabels.get(env.hostFor(view).id) ?? [];
+  const labels = [...(env.editor.jumpLabels.get(env.hostFor(view).id) ?? [])].sort((x, y) => x.pos - y.pos);
+  const groups: { pos: number; end: number; text: string }[] = [];
   for (const label of labels) {
-    if (label.pos >= doc.length) continue;
+    if (label.pos >= doc.length || doc.lineAt(label.pos).to === label.pos) continue;
     const end = nextGraphemeBoundary(doc, label.pos);
-    if (doc.lineAt(label.pos).to === label.pos) continue;
-    builder.push({ from: label.pos, to: end, deco: Decoration.replace({ widget: new LabelWidget(label.text) }) });
+    const last = groups[groups.length - 1];
+    if (last && last.end === label.pos) {
+      last.end = end;
+      last.text += label.text;
+    } else {
+      groups.push({ pos: label.pos, end, text: label.text });
+    }
+  }
+  for (const group of groups) {
+    builder.push({ from: group.pos, to: group.pos, deco: Decoration.widget({ widget: new LabelWidget(group.text), side: -1 }) });
+    builder.push({ from: group.pos, to: group.end, deco: Decoration.mark({ class: "hx-jump-hidden" }) });
   }
   builder.sort((a, b) => a.from - b.from || a.deco.startSide - b.deco.startSide || a.to - b.to);
   const set = new RangeSetBuilder<Decoration>();
@@ -141,58 +157,17 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
   return set.finish();
 }
 
-class NumberMarker extends GutterMarker {
-  constructor(readonly text: string) {
-    super();
-  }
-  override eq(other: GutterMarker): boolean {
-    return other instanceof NumberMarker && other.text === this.text;
-  }
-  override toDOM(): Node {
-    return document.createTextNode(this.text);
-  }
-}
-
-export const whitespaceCompartment = new Compartment();
-
-function relativeMarkers(state: import("@codemirror/state").EditorState): RangeSet<GutterMarker> {
-  const value = state.field(helixField, false);
-  if (!value) return RangeSet.empty;
-  const doc = state.doc;
-  const current = doc.lineAt(value.selection.primary().cursor(doc)).number;
-  const builder = new RangeSetBuilder<GutterMarker>();
-  for (let n = 1; n <= doc.lines; n++) {
-    builder.add(doc.line(n).from, doc.line(n).from, new NumberMarker(n === current ? String(n) : String(Math.abs(n - current))));
-  }
-  return builder.finish();
-}
-
-function relativeField(env: ViewEnv) {
-  const compute = (state: import("@codemirror/state").EditorState) =>
-    env.editor.config.lineNumber === "relative" ? relativeMarkers(state) : RangeSet.empty;
-  const lineOf = (state: import("@codemirror/state").EditorState) => {
-    const value = state.field(helixField, false);
-    return value ? state.doc.lineAt(value.selection.primary().cursor(state.doc)).number : 0;
-  };
-  return StateField.define<{ line: number; mode: string; markers: RangeSet<GutterMarker> }>({
-    create: (state) => ({ line: lineOf(state), mode: env.editor.config.lineNumber, markers: compute(state) }),
-    update(value, tr) {
-      const line = lineOf(tr.state);
-      const mode = env.editor.config.lineNumber;
-      if (!tr.docChanged && line === value.line && mode === value.mode) return value;
-      return { line, mode, markers: compute(tr.state) };
-    },
-    provide: (f) => lineNumberMarkers.from(f, (v) => v.markers),
-  });
-}
-
 function cursorLineDecorations(view: EditorView, env: ViewEnv): DecorationSet {
   if (!env.editor.config.cursorline) return Decoration.none;
   const value = view.state.field(helixField, false);
   if (!value) return Decoration.none;
   const doc = view.state.doc;
   const lines = new Set<number>();
-  for (const r of value.selection.ranges) lines.add(doc.lineAt(r.cursor(doc)).from);
+  const { from: vFrom, to: vTo } = view.viewport;
+  for (const r of value.selection.ranges) {
+    const cursor = r.cursor(doc);
+    if (cursor >= vFrom && cursor <= vTo) lines.add(doc.lineAt(cursor).from);
+  }
   const builder = new RangeSetBuilder<Decoration>();
   for (const from of [...lines].sort((a, b) => a - b)) builder.add(from, from, Decoration.line({ class: "hx-cursorline" }));
   return builder.finish();
@@ -342,7 +317,7 @@ export function helixExtension(env: ViewEnv): Extension {
     { decorations: (v) => v.decorations },
   );
 
-  const gutterNumbers = ViewPlugin.fromClass(
+  const cursorLine = ViewPlugin.fromClass(
     class {
       lines: DecorationSet;
       constructor(view: EditorView) {
@@ -384,14 +359,10 @@ export function helixExtension(env: ViewEnv): Extension {
   });
 
   const panel = showPanel.of((view): Panel => {
-    const dom = document.createElement("div");
-    dom.className = "hx-panel";
-    const info = document.createElement("div");
-    info.className = "hx-autoinfo";
-    const prompt = document.createElement("div");
-    prompt.className = "hx-prompt";
-    dom.append(info, prompt);
-    const render = () => renderPanel(view, env, info, prompt);
+    const dom = createDiv({ cls: "hx-panel" });
+    const info = dom.createDiv({ cls: "hx-autoinfo hx-hidden" });
+    const prompt = dom.createDiv({ cls: "hx-prompt hx-hidden" });
+    const render = () => renderPanel(view, env, dom, info, prompt);
     render();
     return {
       dom,
@@ -410,90 +381,68 @@ export function helixExtension(env: ViewEnv): Extension {
     pasteHandler,
     autoPairsInput,
     decorations,
-    gutterNumbers,
-    relativeField(env),
+    cursorLine,
     attributes,
     scrollMargins,
     panel,
-    whitespaceCompartment.of(editor.config.whitespaceRender ? highlightWhitespace() : []),
   ];
 }
 
-function renderPanel(view: EditorView, env: ViewEnv, info: HTMLElement, prompt: HTMLElement): void {
+function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTMLElement, prompt: HTMLElement): void {
   const { editor } = env;
   const host = env.hostFor(view);
   const active = editor.activePrompt && editor.activePrompt.host.id === host.id && view.hasFocus ? editor.activePrompt : null;
-  prompt.replaceChildren();
+  prompt.empty();
+  prompt.toggleClass("hx-hidden", !active);
   if (active) {
-    prompt.style.display = "";
-    const label = document.createElement("span");
-    label.className = "hx-prompt-label";
-    label.textContent = active.label;
-    const before = document.createElement("span");
-    before.textContent = active.line.slice(0, active.cursor);
-    const cursor = document.createElement("span");
-    cursor.className = "hx-prompt-cursor";
-    cursor.textContent = active.line.slice(active.cursor, active.cursor + 1) || " ";
-    const after = document.createElement("span");
-    after.textContent = active.line.slice(active.cursor + 1);
-    prompt.append(label, before, cursor, after);
     if (active.completions.length > 0) {
-      const list = document.createElement("div");
-      list.className = "hx-completions";
+      const list = prompt.createDiv({ cls: "hx-completions" });
       active.completions.slice(0, 40).forEach((c, i) => {
-        const item = document.createElement("span");
-        item.className = i === active.selection ? "hx-completion hx-completion-selected" : "hx-completion";
-        item.textContent = c.label;
-        list.append(item);
+        list.createSpan({ cls: i === active.selection ? "hx-completion hx-completion-selected" : "hx-completion", text: c.label });
       });
-      prompt.prepend(list);
     }
-  } else {
-    prompt.style.display = "none";
+    prompt.createSpan({ cls: "hx-prompt-label", text: active.label });
+    prompt.createSpan({ text: active.line.slice(0, active.cursor) });
+    prompt.createSpan({ cls: "hx-prompt-cursor", text: active.line.slice(active.cursor, active.cursor + 1) || " " });
+    prompt.createSpan({ text: active.line.slice(active.cursor + 1) });
   }
-  info.replaceChildren();
+  info.empty();
   const auto = editor.config.autoInfo && view.hasFocus ? editor.autoinfo : null;
-  if (auto) {
-    info.style.display = "";
-    const title = document.createElement("div");
-    title.className = "hx-autoinfo-title";
-    const rows: [string, string][] = [];
-    let unavailable = new Set<string>();
-    if ("kind" in auto) {
-      title.textContent = auto.name;
-      const grouped = new Map<string, string[]>();
-      for (const [key, trie] of auto.map) {
-        const desc = trie.kind === "node" ? trie.name : trie.kind === "sequence" ? "[Multiple commands]" : describe(trie.command);
-        if (desc === "no_op") continue;
-        const list = grouped.get(desc) ?? [];
-        list.push(key);
-        grouped.set(desc, list);
-      }
-      for (const [desc, keys] of grouped) rows.push([keys.join(", "), desc]);
-      unavailable = new Set(
-        [...auto.map]
-          .filter(([, t]) => t.kind === "command" && t.command.kind === "static" && !editor.hasCommand(t.command.name))
-          .map(([, t]) => describe((t as { command: import("../keymap/trie").MappableCommand }).command)),
-      );
-    } else {
-      title.textContent = auto.title;
-      rows.push(...auto.body);
+  info.toggleClass("hx-hidden", !auto);
+  if (!auto) return;
+  const title = info.createDiv({ cls: "hx-autoinfo-title" });
+  const rows: [string, string][] = [];
+  let unavailable = new Set<string>();
+  if ("kind" in auto) {
+    title.setText(auto.name);
+    const grouped = new Map<string, string[]>();
+    for (const [key, trie] of auto.map) {
+      const desc = trie.kind === "node" ? trie.name : trie.kind === "sequence" ? "[Multiple commands]" : describe(trie.command);
+      if (desc === "no_op") continue;
+      const list = grouped.get(desc) ?? [];
+      list.push(key);
+      grouped.set(desc, list);
     }
-    info.append(title);
-    for (const [k, d] of rows) {
-      const row = document.createElement("div");
-      row.className = unavailable.has(d) ? "hx-autoinfo-row hx-autoinfo-unavailable" : "hx-autoinfo-row";
-      const ks = document.createElement("span");
-      ks.className = "hx-autoinfo-key";
-      ks.textContent = k;
-      const ds = document.createElement("span");
-      ds.textContent = d;
-      row.append(ks, ds);
-      info.append(row);
-    }
+    for (const [desc, keys] of grouped) rows.push([keys.join(", "), desc]);
+    unavailable = new Set(
+      [...auto.map]
+        .filter(([, t]) => t.kind === "command" && t.command.kind === "static" && !editor.hasCommand(t.command.name))
+        .map(([, t]) => describe((t as { command: import("../keymap/trie").MappableCommand }).command)),
+    );
   } else {
-    info.style.display = "none";
+    title.setText(auto.title);
+    rows.push(...auto.body);
   }
+  for (const [k, d] of rows) {
+    const row = info.createDiv({ cls: unavailable.has(d) ? "hx-autoinfo-row hx-autoinfo-unavailable" : "hx-autoinfo-row" });
+    row.createSpan({ cls: "hx-autoinfo-key", text: k });
+    row.createSpan({ text: d });
+  }
+  const statusBar = view.dom.ownerDocument.querySelector(".status-bar");
+  const panelRect = dom.getBoundingClientRect();
+  const statusRect = statusBar?.getBoundingClientRect();
+  const lift = statusRect && statusRect.height > 0 && statusRect.left < panelRect.right ? Math.max(0, panelRect.bottom - statusRect.top) : 0;
+  dom.setCssProps({ "--hx-autoinfo-lift": `${lift}px` });
 }
 
 function describe(command: import("../keymap/trie").MappableCommand): string {

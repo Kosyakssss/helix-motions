@@ -264,11 +264,22 @@ const checks: Check[] = [
     },
   },
   {
-    name: "relative line numbers follow the cursor",
+    name: "line numbers in config switch Obsidian's own line numbers",
     run: () => {
-      setDoc("a\nb\n#[c|]#\nd\ne\n");
-      const nums = dom("return [...v.dom.querySelectorAll('.cm-lineNumbers .cm-gutterElement')].map(e=>e.innerText).filter(t=>t)") as string[];
-      expectTrue("numbers", nums.join(",").startsWith("2,1,3,1,2"), JSON.stringify(nums));
+      const shown = () => evalJs<boolean>(`JSON.stringify(app.vault.getConfig("showLineNumber"))`);
+      const before = shown();
+      try {
+        api(`a.useConfig(${JSON.stringify('[editor]\ngutters = ["diagnostics"]\n')})`);
+        expectEq("gutters without line-numbers", shown(), false);
+        api(`a.useConfig(${JSON.stringify('[editor]\nline-number = "relative"\n')})`);
+        expectEq("line-number turns them on", shown(), true);
+        api(`a.useConfig(${JSON.stringify('[editor]\nscrolloff = 3\n')})`);
+        expectEq("no key leaves the setting alone", shown(), true);
+        expectEq("no relative gutter", dom("return v.dom.querySelectorAll('.cm-lineNumbers .cm-gutterElement').length > 0 && [...v.dom.querySelectorAll('.cm-lineNumbers .cm-gutterElement')].some(e => e.innerText === '0')"), false);
+      } finally {
+        evalJs(`JSON.stringify((app.vault.setConfig("showLineNumber", ${JSON.stringify(before)}), "ok"))`);
+        api("a.useConfig(null)");
+      }
     },
   },
   {
