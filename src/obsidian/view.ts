@@ -320,7 +320,8 @@ export function helixExtension(env: ViewEnv): Extension {
     const dom = createDiv({ cls: "hx-panel" });
     const info = dom.createDiv({ cls: "hx-autoinfo hx-hidden" });
     const prompt = dom.createDiv({ cls: "hx-prompt hx-hidden" });
-    const render = () => renderPanel(view, env, dom, info, prompt);
+    const message = dom.createDiv({ cls: "hx-message hx-hidden" });
+    const render = () => renderPanel(view, env, dom, info, prompt, message);
     render();
     return {
       dom,
@@ -347,7 +348,7 @@ export function helixExtension(env: ViewEnv): Extension {
   ];
 }
 
-function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTMLElement, prompt: HTMLElement): void {
+function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTMLElement, prompt: HTMLElement, message: HTMLElement): void {
   const { editor } = env;
   const host = env.hostFor(view);
   const active = editor.activePrompt && editor.activePrompt.host.id === host.id && view.hasFocus ? editor.activePrompt : null;
@@ -365,6 +366,17 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
     prompt.createSpan({ cls: "hx-prompt-cursor", text: active.line.slice(active.cursor, active.cursor + 1) || " " });
     prompt.createSpan({ text: active.line.slice(active.cursor + 1) });
   }
+  const status = !active && view.hasFocus ? editor.status : null;
+  message.setText(status?.message ?? "");
+  message.toggleClass("hx-hidden", !status);
+  message.toggleClass("hx-message-error", status?.severity === "error");
+  const statusBar = view.dom.ownerDocument.querySelector(".status-bar");
+  const editorRect = view.dom.getBoundingClientRect();
+  const statusRect = statusBar?.getBoundingClientRect();
+  const strip = statusBar?.querySelector(".hx-status-strip:not(.hx-hidden)")?.getBoundingClientRect();
+  const covered = statusRect && statusRect.height > 0 && statusRect.top < editorRect.bottom && statusRect.left < editorRect.right;
+  const coverLeft = covered ? Math.min(statusRect.left, strip?.left ?? Infinity) : editorRect.right;
+  dom.setCssProps({ "--hx-bar-overlap": `${Math.max(0, editorRect.right - coverLeft)}px` });
   info.empty();
   const auto = editor.config.autoInfo && view.hasFocus ? editor.autoinfo : null;
   info.toggleClass("hx-hidden", !auto);
@@ -397,9 +409,7 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
     row.createSpan({ cls: "hx-autoinfo-key", text: k });
     row.createSpan({ text: d });
   }
-  const statusBar = view.dom.ownerDocument.querySelector(".status-bar");
   const panelRect = dom.getBoundingClientRect();
-  const statusRect = statusBar?.getBoundingClientRect();
   const lift = statusRect && statusRect.height > 0 && statusRect.left < panelRect.right ? Math.max(0, panelRect.bottom - statusRect.top) : 0;
   dom.setCssProps({ "--hx-autoinfo-lift": `${lift}px` });
 }

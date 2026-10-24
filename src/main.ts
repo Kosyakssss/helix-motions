@@ -81,7 +81,11 @@ export default class HelixMotionsPlugin extends Plugin {
       .then((engine) => setRegexEngine(engine))
       .catch((err: unknown) => console.error("Helix: regex engine unavailable", err));
     this.helix.ui = {
-      notify: () => this.refreshStatus(),
+      notify: () =>
+        queueMicrotask(() => {
+          if (this.activeView?.dom.isConnected) this.refresh(this.hostForView(this.activeView));
+          else this.refreshStatus();
+        }),
       render: (host) => this.refresh(host),
       promptChanged: (host) => this.refresh(host),
       jumpLabels: (host) => this.refresh(host),
@@ -378,6 +382,7 @@ export default class HelixMotionsPlugin extends Plugin {
     const sig = JSON.stringify([
       p ? [p.label, p.line, p.cursor, p.selection, p.completions.length] : null,
       auto ? ("kind" in auto ? auto.name : auto.title) : null,
+      this.helix.status,
       this.helix.jumpLabels.get(host.id)?.length ?? 0,
     ]);
     if (sig !== this.uiSignature) {
