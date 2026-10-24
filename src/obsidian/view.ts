@@ -31,6 +31,9 @@ export interface ViewEnv {
   onFocusChange(view: EditorView): void;
   onRender(view: EditorView): void;
   onChanges(view: EditorView, changes: import("@codemirror/state").ChangeSet): void;
+  onDocTransaction(view: EditorView, tr: import("@codemirror/state").Transaction): void;
+  onViewOpen(view: EditorView): void;
+  onViewClose(view: EditorView): void;
 }
 
 class EolCursor extends WidgetType {
@@ -293,6 +296,7 @@ export function helixExtension(env: ViewEnv): Extension {
     class {
       decorations: DecorationSet;
       constructor(readonly view: EditorView) {
+        env.onViewOpen(view);
         this.decorations = buildDecorations(view, env);
         queueMicrotask(() => {
           const value = view.state.field(helixField, false);
@@ -304,12 +308,16 @@ export function helixExtension(env: ViewEnv): Extension {
         });
       }
       update(update: ViewUpdate) {
+        for (const tr of update.transactions) if (tr.docChanged) env.onDocTransaction(update.view, tr);
         if (update.docChanged) env.onChanges(update.view, update.changes);
         if (update.docChanged || update.selectionSet || update.viewportChanged || update.transactions.length > 0) {
           this.decorations = buildDecorations(update.view, env);
         }
         if (update.focusChanged && update.view.hasFocus) env.onFocusChange(update.view);
         if (update.transactions.length > 0 || update.focusChanged) env.onRender(update.view);
+      }
+      destroy() {
+        env.onViewClose(this.view);
       }
     },
     { decorations: (v) => v.decorations },

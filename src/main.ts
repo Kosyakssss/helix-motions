@@ -15,7 +15,7 @@ import { renderStatus } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
 import { loadRegex, loadSyntax } from "./obsidian/syntax";
 import { setRegexEngine } from "./core/regex";
-import type { SyntaxCache } from "./syntax/languages";
+import type { SyntaxSessions } from "./syntax/languages";
 import { SystemClipboard } from "./obsidian/clipboard";
 import { helixField } from "./state";
 import { Registers } from "./registers";
@@ -37,7 +37,8 @@ export default class HelixMotionsPlugin extends Plugin {
   editorExtension: Extension = [];
   private configView: EditorView | null = null;
   private settingTab: HelixSettingTab | null = null;
-  private syntaxCache: SyntaxCache | null = null;
+  private syntaxSessions: SyntaxSessions | null = null;
+  private syntaxViews = new Set<EditorView>();
 
   override async onload(): Promise<void> {
     this.settings = { ...DEFAULT_SETTINGS, ...((await this.loadData()) as Partial<Settings> | null) };
@@ -69,9 +70,11 @@ export default class HelixMotionsPlugin extends Plugin {
     this.helix.viewOps = makeViewOps(() => this.helix.config.scrolloff);
     this.helix.commentTokens = (host, pos) => commentTokensAt(host.state.doc, pos);
     void loadSyntax()
-      .then((cache) => {
-        this.syntaxCache = cache;
-        this.helix.syntax = (host) => (host.view && !this.isConfigView(host.view) ? cache.get(host.view, host.state.doc) : null);
+      .then((sessions) => {
+        this.syntaxSessions = sessions;
+        for (const view of this.syntaxViews) if (!this.isConfigView(view)) sessions.open(view, view.state.doc);
+        this.helix.syntax = (host) =>
+          host.view && !this.isConfigView(host.view) ? sessions.get(host.view, host.state.doc) : null;
       })
       .catch((err: unknown) => console.error("Helix: syntax tree unavailable", err));
     void loadRegex()
@@ -126,6 +129,15 @@ export default class HelixMotionsPlugin extends Plugin {
         },
         onChanges: (view, changes) => {
           this.helix.docChanged(this.hostForView(view), changes);
+        },
+        onDocTransaction: (view, tr) => this.syntaxSessions?.change(view, tr.startState.doc, tr.changes, tr.newDoc),
+        onViewOpen: (view) => {
+          this.syntaxViews.add(view);
+          if (!this.isConfigView(view)) this.syntaxSessions?.open(view, view.state.doc);
+        },
+        onViewClose: (view) => {
+          this.syntaxViews.delete(view);
+          this.syntaxSessions?.close(view);
         },
         physicalKeys: () => this.settings.physicalKeys,
       });
@@ -234,7 +246,7 @@ export default class HelixMotionsPlugin extends Plugin {
 
   override onunload(): void {
     this.statusEl?.remove();
-    this.syntaxCache?.clear();
+    this.syntaxSessions?.clear();
   }
 
   baseConfig(): Config {
@@ -265,6 +277,7 @@ export default class HelixMotionsPlugin extends Plugin {
 
   setConfigView(view: EditorView | null): void {
     this.configView = view;
+    if (view) this.syntaxSessions?.close(view);
   }
 
   isConfigView(view: EditorView | null): boolean {

@@ -1,5 +1,5 @@
-import type { Text } from "@codemirror/state";
-import { Language, Parser, Query, Runtime } from "./ts";
+import type { ChangeSet, Text } from "@codemirror/state";
+import { InjectionQuery, Language, Parser, Query, Runtime } from "./ts";
 import { Syntax, type Loader } from "./syntax";
 
 const MARKDOWN_INJECTIONS = `
@@ -33,7 +33,7 @@ export async function createLoader(binary: Uint8Array): Promise<Loader> {
     rt,
     parser: new Parser(rt),
     languages: [
-      { id: "markdown", injectionRegex: /md|markdown/, grammar: markdown, injections: new Query(rt, markdown, MARKDOWN_INJECTIONS) },
+      { id: "markdown", injectionRegex: /md|markdown/, grammar: markdown, injections: new InjectionQuery(rt, new Query(rt, markdown, MARKDOWN_INJECTIONS)) },
       { id: "markdown.inline", injectionRegex: /markdown\.inline/, grammar: markdownInline, injections: null },
     ],
   };
@@ -43,35 +43,82 @@ export function markdownSyntax(loader: Loader, text: string): Syntax {
   return new Syntax(loader, text, loader.languages[0]!);
 }
 
-export class SyntaxCache {
-  private entries = new Map<unknown, { doc: Text; syntax: Syntax }>();
+interface Pending {
+  changes: ChangeSet;
+  newDoc: Text;
+}
+
+interface Session {
+  doc: Text;
+  syntax: Syntax | null;
+  pending: Pending[];
+}
+
+export class SyntaxSessions {
+  private entries = new Map<unknown, Session>();
+  private idle = false;
 
   constructor(
     private readonly loader: Loader,
-    private readonly limit = 8,
+    private readonly schedule: ((work: () => void) => void) | null = null,
   ) {}
 
-  get(key: unknown, doc: Text): Syntax {
+  open(key: unknown, doc: Text): void {
+    if (this.entries.has(key)) return;
+    this.entries.set(key, { doc, syntax: null, pending: [] });
+    this.scheduleIdle();
+  }
+
+  change(key: unknown, oldDoc: Text, changes: ChangeSet, newDoc: Text): void {
     const entry = this.entries.get(key);
-    if (entry && entry.doc === doc) {
-      this.entries.delete(key);
-      this.entries.set(key, entry);
-      return entry.syntax;
+    if (!entry) return;
+    const last = entry.pending.length > 0 ? entry.pending[entry.pending.length - 1]!.newDoc : entry.doc;
+    if (last !== oldDoc) {
+      this.close(key);
+      this.open(key, newDoc);
+      return;
     }
-    entry?.syntax.delete();
+    entry.pending.push({ changes, newDoc });
+    this.scheduleIdle();
+  }
+
+  get(key: unknown, doc: Text): Syntax {
+    let entry = this.entries.get(key);
+    if (entry) this.flush(entry);
+    if (!entry || entry.doc !== doc) {
+      this.close(key);
+      this.open(key, doc);
+      entry = this.entries.get(key)!;
+      this.flush(entry);
+    }
+    return entry.syntax!;
+  }
+
+  close(key: unknown): void {
+    this.entries.get(key)?.syntax?.delete();
     this.entries.delete(key);
-    const syntax = markdownSyntax(this.loader, doc.toString());
-    this.entries.set(key, { doc, syntax });
-    for (const [oldKey, old] of this.entries) {
-      if (this.entries.size <= this.limit) break;
-      old.syntax.delete();
-      this.entries.delete(oldKey);
-    }
-    return syntax;
   }
 
   clear(): void {
-    for (const entry of this.entries.values()) entry.syntax.delete();
+    for (const entry of this.entries.values()) entry.syntax?.delete();
     this.entries.clear();
+  }
+
+  private flush(entry: Session): Syntax {
+    entry.syntax ??= markdownSyntax(this.loader, entry.doc.toString());
+    for (const { changes, newDoc } of entry.pending.splice(0)) {
+      entry.syntax.applyChanges(changes, newDoc);
+      entry.doc = newDoc;
+    }
+    return entry.syntax;
+  }
+
+  private scheduleIdle(): void {
+    if (!this.schedule || this.idle) return;
+    this.idle = true;
+    this.schedule(() => {
+      this.idle = false;
+      for (const entry of this.entries.values()) this.flush(entry);
+    });
   }
 }

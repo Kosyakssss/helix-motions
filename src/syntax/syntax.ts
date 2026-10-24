@@ -1,10 +1,11 @@
-import type { Language, Node, Parser, Query, QueryMatch, Runtime, Tree, TreeCursor as TSCursor } from "./ts";
+import type { ChangeSet, Text } from "@codemirror/state";
+import type { InjectionMatch, InjectionQuery, Language, Node, Parser, Runtime, Tree, TreeCursor as TSCursor } from "./ts";
 
 export interface LanguageConfig {
   id: string;
   injectionRegex: RegExp | null;
   grammar: Language;
-  injections: Query | null;
+  injections: InjectionQuery | null;
 }
 
 export interface Loader {
@@ -18,27 +19,107 @@ type ByteRange = [number, number];
 interface Injection {
   range: ByteRange;
   layer: Layer;
+  matchedNodeRange: ByteRange;
+}
+
+interface Flags {
+  reused: boolean;
+  modified: boolean;
+  moved: boolean;
+  touched: boolean;
+}
+
+export interface Edit {
+  start: number;
+  oldEnd: number;
+  newEnd: number;
 }
 
 const MAX = 0xffffffff;
 
+function freshFlags(): Flags {
+  return { reused: false, modified: false, moved: false, touched: false };
+}
+
 export class Layer {
   tree: Tree | null = null;
-  injections: Injection[] | null = null;
-  readonly ranges: ByteRange[] = [];
+  injections: Injection[] = [];
+  ranges: ByteRange[] = [];
+  flags: Flags = freshFlags();
   constructor(
     readonly language: LanguageConfig,
     readonly parent: Layer | null,
   ) {}
 }
 
+class Source {
+  readonly utf8: Uint8Array;
+  readonly ptr: number;
+  private maps: { byteAt: Uint32Array; posAt: Uint32Array } | null = null;
+
+  constructor(
+    private readonly rt: Runtime,
+    readonly text: string,
+  ) {
+    this.utf8 = new TextEncoder().encode(text);
+    this.ptr = rt.alloc(this.utf8);
+  }
+
+  private build(): { byteAt: Uint32Array; posAt: Uint32Array } {
+    if (this.maps) return this.maps;
+    const text = this.text;
+    const byteAt = new Uint32Array(text.length + 1);
+    const posAt = new Uint32Array(this.utf8.length + 1);
+    let byte = 0;
+    for (let pos = 0; pos < text.length; ) {
+      const code = text.codePointAt(pos)!;
+      const units = code > 0xffff ? 2 : 1;
+      const bytes = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
+      for (let u = 0; u < units; u++) byteAt[pos + u] = byte;
+      for (let b = 0; b < bytes; b++) posAt[byte + b] = pos;
+      pos += units;
+      byte += bytes;
+    }
+    byteAt[text.length] = byte;
+    posAt[byte] = text.length;
+    this.maps = { byteAt, posAt };
+    return this.maps;
+  }
+
+  byteOf(pos: number): number {
+    const { byteAt } = this.build();
+    return byteAt[Math.min(Math.max(pos, 0), byteAt.length - 1)]!;
+  }
+
+  posOf(byte: number): number {
+    const { posAt } = this.build();
+    return posAt[Math.min(byte, posAt.length - 1)]!;
+  }
+
+  free(): void {
+    this.rt.x.hm_free(this.ptr);
+  }
+}
+
+function utf8Length(s: string): number {
+  let n = 0;
+  for (let i = 0; i < s.length; i++) {
+    const c = s.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xd800 && c <= 0xdbff) {
+      n += 4;
+      i++;
+    } else n += 3;
+  }
+  return n;
+}
+
 export class Syntax {
   readonly root: Layer;
+  private readonly layers = new Set<Layer>();
   private readonly cursors = new Set<TSCursor>();
-  private readonly utf8: Uint8Array;
-  private textPtr: number;
-  private readonly byteAt: Uint32Array;
-  private readonly posAt: Uint32Array;
+  private source: Source;
 
   constructor(
     private readonly loader: Loader,
@@ -46,58 +127,88 @@ export class Syntax {
     language: LanguageConfig,
   ) {
     this.root = new Layer(language, null);
-    this.root.ranges.push([0, MAX]);
-    this.utf8 = new TextEncoder().encode(text);
-    this.textPtr = loader.rt.alloc(this.utf8);
-    this.byteAt = new Uint32Array(text.length + 1);
-    this.posAt = new Uint32Array(this.utf8.length + 1);
-    let byte = 0;
-    for (let pos = 0; pos < text.length; ) {
-      const code = text.codePointAt(pos)!;
-      const units = code > 0xffff ? 2 : 1;
-      const bytes = code < 0x80 ? 1 : code < 0x800 ? 2 : code < 0x10000 ? 3 : 4;
-      for (let u = 0; u < units; u++) this.byteAt[pos + u] = byte;
-      for (let b = 0; b < bytes; b++) this.posAt[byte + b] = pos;
-      pos += units;
-      byte += bytes;
-    }
-    this.byteAt[text.length] = byte;
-    this.posAt[byte] = text.length;
+    this.root.ranges = [[0, MAX]];
+    this.layers.add(this.root);
+    this.source = new Source(loader.rt, text);
+    this.update([]);
   }
 
   byteOf(pos: number): number {
-    return this.byteAt[Math.min(pos, this.byteAt.length - 1)]!;
+    return this.source.byteOf(pos);
   }
 
   posOf(byte: number): number {
-    return this.posAt[Math.min(byte, this.posAt.length - 1)]!;
+    return this.source.posOf(byte);
   }
 
   slice(start: number, end: number): string {
-    return new TextDecoder().decode(this.utf8.subarray(start, end));
+    return new TextDecoder().decode(this.source.utf8.subarray(start, end));
   }
 
   get byteLength(): number {
-    return this.utf8.length;
+    return this.source.utf8.length;
+  }
+
+  applyChanges(changes: ChangeSet, newDoc: Text): void {
+    const old = this.source;
+    const edits: Edit[] = [];
+    changes.iterChanges((fromA, toA, _fromB, _toB, inserted) => {
+      const start = old.byteOf(fromA);
+      edits.push({ start, oldEnd: old.byteOf(toA), newEnd: start + utf8Length(inserted.toString()) });
+    });
+    this.source = new Source(this.loader.rt, newDoc.toString());
+    old.free();
+    this.update(edits);
+  }
+
+  private update(edits: Edit[]): void {
+    const queue: Layer[] = [this.root];
+    this.root.flags.touched = true;
+    this.root.flags.modified = true;
+    while (queue.length > 0) {
+      const layer = queue.pop()!;
+      if (layer.ranges.length === 0) continue;
+      if (layer.tree) {
+        if (layer.flags.moved || layer.flags.modified) {
+          for (let i = edits.length - 1; i >= 0; i--) layer.tree.edit(edits[i]!.start, edits[i]!.oldEnd, edits[i]!.newEnd);
+        }
+        if (layer.flags.modified) this.parse(layer);
+      } else {
+        this.parse(layer);
+      }
+      this.runInjectionQuery(layer, edits, (child) => queue.push(child));
+    }
+    for (const layer of this.layers) {
+      if (!layer.flags.touched) {
+        layer.tree?.delete();
+        layer.tree = null;
+        this.layers.delete(layer);
+      }
+      layer.flags = freshFlags();
+    }
+  }
+
+  private parse(layer: Layer): void {
+    const ranges = layer === this.root ? null : layer.ranges.map(([start, end]) => ({ start, end }));
+    let old = layer.tree;
+    if (old && layer !== this.root) {
+      const first = layer.ranges[0]?.[0] ?? 0;
+      const last = layer.ranges[layer.ranges.length - 1]?.[1] ?? MAX;
+      const root = old.rootNode;
+      if (!(root.startByte <= first && root.endByte >= last)) old = null;
+    }
+    const tree = this.loader.parser.parse(layer.language.grammar, this.source.ptr, this.source.utf8.length, ranges, old);
+    if (!tree) throw new Error("tree-sitter parse failed");
+    layer.tree?.delete();
+    layer.tree = tree;
   }
 
   treeOf(layer: Layer): Tree {
-    if (!layer.tree) {
-      const ranges = layer === this.root ? null : layer.ranges.map(([start, end]) => ({ start, end }));
-      const tree = this.loader.parser.parse(layer.language.grammar, this.textPtr, this.utf8.length, ranges);
-      if (!tree) throw new Error("tree-sitter parse failed");
-      layer.tree = tree;
-    }
-    return layer.tree;
-  }
-
-  injectionsOf(layer: Layer): Injection[] {
-    if (!layer.injections) layer.injections = this.runInjectionQuery(layer);
-    return layer.injections;
+    return layer.tree!;
   }
 
   injectionAtByteIdx(layer: Layer, idx: number): Injection | null {
-    const injections = this.injectionsOf(layer);
+    const injections = layer.injections;
     let lo = 0;
     let hi = injections.length;
     while (lo < hi) {
@@ -129,7 +240,9 @@ export class Syntax {
   }
 
   treeForByteRange(start: number, end: number): Tree {
-    return this.treeOf(this.layerForByteRange(start, end));
+    let layer: Layer | null = this.layerForByteRange(start, end);
+    while (layer && !layer.tree) layer = layer.parent;
+    return (layer ?? this.root).tree!;
   }
 
   namedDescendantForByteRange(start: number, end: number): Node | null {
@@ -157,125 +270,162 @@ export class Syntax {
   delete(): void {
     for (const cursor of this.cursors) cursor.delete();
     this.cursors.clear();
-    const free = (layer: Layer) => {
+    for (const layer of this.layers) {
       layer.tree?.delete();
       layer.tree = null;
-      for (const injection of layer.injections ?? []) if (injection.layer.tree) free(injection.layer);
-    };
-    free(this.root);
-    if (this.textPtr) this.loader.rt.x.hm_free(this.textPtr);
-    this.textPtr = 0;
+    }
+    this.layers.clear();
+    this.source.free();
   }
 
-  private runInjectionQuery(layer: Layer): Injection[] {
+  private mapInjections(layer: Layer, edits: Edit[]): void {
+    if (edits.length === 0) return;
+    const injections = layer.injections;
+    let first = 0;
+    while (first < injections.length && injections[first]!.range[1] < edits[0]!.start) first++;
+    if (first === injections.length) return;
+    let offset = 0;
+    let e = 0;
+    const shift = (edit: Edit) => edit.newEnd - edit.oldEnd;
+    for (let i = first; i < injections.length; i++) {
+      const injection = injections[i]!;
+      const range = injection.range;
+      const node = injection.matchedNodeRange;
+      const flags = injection.layer.flags;
+      while (e < edits.length && edits[e]!.oldEnd < node[0]) offset += shift(edits[e++]!);
+      let mappedNodeStart = node[0] + offset;
+      if (e < edits.length && edits[e]!.start <= node[0]) mappedNodeStart = edits[e]!.newEnd + offset;
+      while (e < edits.length && edits[e]!.oldEnd < range[0]) offset += shift(edits[e++]!);
+      flags.moved = offset !== 0;
+      let mappedStart = range[0] + offset;
+      if (e < edits.length && edits[e]!.oldEnd <= range[1]) {
+        const edit = edits[e++]!;
+        if (edit.start < range[0]) {
+          flags.moved = true;
+          mappedStart = edit.newEnd + offset;
+        } else {
+          flags.modified = true;
+        }
+        offset += shift(edit);
+        while (e < edits.length && edits[e]!.oldEnd <= range[1]) offset += shift(edits[e++]!);
+      }
+      let mappedEnd = range[1] + offset;
+      if (e < edits.length && edits[e]!.start <= range[1]) {
+        flags.modified = true;
+        if (edits[e]!.start < range[0]) {
+          mappedStart = edits[e]!.newEnd + offset;
+          mappedEnd = mappedStart;
+        }
+      }
+      let mappedNodeEnd = node[1] + offset;
+      if (e < edits.length && edits[e]!.start <= node[1] && edits[e]!.start < node[0]) {
+        mappedNodeStart = edits[e]!.newEnd + offset;
+        mappedNodeEnd = mappedNodeStart;
+      }
+      injection.range = [mappedStart, mappedEnd];
+      injection.matchedNodeRange = [mappedNodeStart, mappedNodeEnd];
+    }
+  }
+
+  private runInjectionQuery(layer: Layer, edits: Edit[], parseLayer: (layer: Layer) => void): void {
+    this.mapInjections(layer, edits);
     const query = layer.language.injections;
-    if (!query) return [];
-    const tree = this.treeOf(layer);
+    if (!query || !layer.tree) return;
+    const parentRanges = layer.ranges;
     const injections: Injection[] = [];
-    for (const match of this.matches(query, tree.rootNode)) {
-      const nodeRange: ByteRange = [match.node.startByte, match.node.endByte];
+    const old = layer.injections;
+    let oi = 0;
+    for (const mat of this.matches(query, layer.tree.rootNode)) {
+      const matched: ByteRange = [mat.start, mat.end];
       let insertPosition = injections.length;
       const last = injections[injections.length - 1];
-      if (last && rangesIntersect(last.range, nodeRange)) {
-        if (last.range[0] <= nodeRange[0]) continue;
-        insertPosition = injections.findIndex((injection) => injection.range[1] > nodeRange[0]);
-        if (injections[insertPosition]!.range[0] < nodeRange[1]) continue;
+      if (last && rangesIntersect(last.range, matched)) {
+        if (last.range[0] <= matched[0]) continue;
+        insertPosition = injections.findIndex((injection) => injection.range[1] > matched[0]);
+        if (injections[insertPosition]!.range[0] < matched[1]) continue;
       }
-      const child = new Layer(match.language, layer);
+      while (oi < old.length && old[oi]!.range[1] <= matched[0]) old[oi++]!.layer.flags.modified = true;
+      let reused: Injection | null = null;
+      const candidate = old[oi];
+      if (candidate && candidate.range[0] < matched[1] && candidate.layer.language === mat.language && !candidate.layer.flags.reused) {
+        reused = candidate;
+        oi++;
+      }
+      const child = this.initInjection(layer, mat.language, reused);
+      if (!child.flags.touched) {
+        child.flags.touched = true;
+        parseLayer(child);
+      }
+      if (child.flags.reused) {
+        child.flags.modified ||=
+          !reused || reused.matchedNodeRange[0] !== matched[0] || reused.matchedNodeRange[1] !== matched[1] || reused.layer !== child;
+      }
       const added: Injection[] = [];
-      for (const range of intersectRanges(match.includeChildren, match.node, layer.ranges)) {
+      for (const range of intersectRanges(matched, mat.excluded, parentRanges)) {
         child.ranges.push(range);
-        added.push({ range, layer: child });
+        added.push({ range, layer: child, matchedNodeRange: matched });
       }
       injections.splice(insertPosition, 0, ...added);
     }
-    return injections;
+    for (; oi < old.length; oi++) old[oi]!.layer.flags.modified = true;
+    layer.injections = injections;
   }
 
-  private matches(query: Query, root: Node): InjectionMatch[] {
-    const result: InjectionMatch[] = [];
-    const found = query.matches(root).map((match) => ({ match, start: contentStart(match) }));
-    found.sort((a, b) => a.start - b.start || a.match.patternIndex - b.match.patternIndex);
-    for (const { match } of found) {
-      const processed = this.processMatch(match);
-      if (processed && processed.node.endByte > processed.node.startByte) result.push(processed);
+  private initInjection(parent: Layer, language: LanguageConfig, reuse: Injection | null): Layer {
+    if (reuse) {
+      reuse.layer.flags.reused = true;
+      reuse.layer.ranges = [];
+      return reuse.layer;
+    }
+    const layer = new Layer(language, parent);
+    this.layers.add(layer);
+    return layer;
+  }
+
+  private matches(query: InjectionQuery, root: Node): ResolvedMatch[] {
+    const found = query.matches(root);
+    found.sort((a, b) => a.start - b.start || a.pattern - b.pattern);
+    const result: ResolvedMatch[] = [];
+    for (const match of found) {
+      if (match.end <= match.start) continue;
+      const language = this.resolve(query, match);
+      if (language) result.push({ ...match, language });
     }
     return result;
   }
 
-  private processMatch(match: QueryMatch): InjectionMatch | null {
-    const properties = match.setProperties ?? {};
-    let marker: { kind: "match" | "shebang" | "name"; text: string } | null = null;
-    let content: Node | null = null;
-    for (const capture of match.captures) {
-      if (capture.name === "injection.language") {
-        marker = { kind: "match", text: this.slice(capture.node.startByte, capture.node.endByte) };
-      } else if (capture.name === "injection.shebang") {
-        const nodeText = this.slice(capture.node.startByte, capture.node.endByte);
-        const lines = nodeText.split("\n").slice(0, 2).join("\n");
-        const shebang = SHEBANG.exec(lines);
-        marker = shebang ? { kind: "shebang", text: shebang[1]! } : null;
-      } else if (capture.name === "injection.content") {
-        content = capture.node;
-      }
-    }
-    if (!content) return null;
-    if (!marker && typeof properties["injection.language"] === "string") {
-      marker = { kind: "name", text: properties["injection.language"] };
-    }
-    if (!marker) return null;
-    const language = this.languageForMarker(marker);
-    if (!language) return null;
-    const includeChildren: IncludedChildren =
-      "injection.include-unnamed-children" in properties ? "unnamed" : "injection.include-children" in properties ? "all" : "none";
-    return { language, node: content, includeChildren };
-  }
-
-  private languageForMarker(marker: { kind: "match" | "shebang" | "name"; text: string }): LanguageConfig | null {
+  private resolve(query: InjectionQuery, match: InjectionMatch): LanguageConfig | null {
     const languages = this.loader.languages;
-    if (marker.kind === "name") return languages.find((l) => l.id === marker.text) ?? null;
-    if (marker.kind === "shebang") return null;
-    const exact = languages.find((l) => l.id === marker.text);
-    if (exact) return exact;
-    let best: LanguageConfig | null = null;
-    let bestLength = 0;
-    for (const language of languages) {
-      const found = language.injectionRegex?.exec(marker.text);
-      if (found && found[0].length > bestLength) {
-        best = language;
-        bestLength = found[0].length;
+    if (match.languageRange) {
+      const text = this.slice(match.languageRange[0], match.languageRange[1]);
+      const exact = languages.find((l) => l.id === text);
+      if (exact) return exact;
+      let best: LanguageConfig | null = null;
+      let bestLength = 0;
+      for (const language of languages) {
+        const found = language.injectionRegex?.exec(text);
+        if (found && found[0].length > bestLength) {
+          best = language;
+          bestLength = found[0].length;
+        }
       }
+      return best;
     }
-    return best;
+    if (match.shebang) return null;
+    const name = query.properties(match.pattern)["injection.language"];
+    return typeof name === "string" ? (languages.find((l) => l.id === name) ?? null) : null;
   }
 }
 
-type IncludedChildren = "none" | "all" | "unnamed";
-
-interface InjectionMatch {
+interface ResolvedMatch extends InjectionMatch {
   language: LanguageConfig;
-  node: Node;
-  includeChildren: IncludedChildren;
-}
-
-const SHEBANG = /#!\s*(?:\S*[/\\](?:env\s+(?:-\S+\s+)*)?)?([^\s.\d]+)/;
-
-function contentStart(match: QueryMatch): number {
-  return match.captures.find((c) => c.name === "injection.content")?.node.startByte ?? 0;
 }
 
 function rangesIntersect(a: ByteRange, b: ByteRange): boolean {
   return a[0] === b[0] || (a[1] > b[0] && b[1] > a[0]);
 }
 
-function intersectRanges(includeChildren: IncludedChildren, node: Node, parentRanges: ByteRange[]): ByteRange[] {
-  const range: ByteRange = [node.startByte, node.endByte];
-  const excluded: ByteRange[] = [];
-  if (includeChildren !== "all") {
-    for (const child of node.children) {
-      if (includeChildren === "none" || child.isNamed) excluded.push([child.startByte, child.endByte]);
-    }
-  }
+function intersectRanges(range: ByteRange, excluded: ByteRange[], parentRanges: ByteRange[]): ByteRange[] {
   const parents = excludeRanges(
     parentRanges.filter((r) => r[1] > range[0]),
     excluded,

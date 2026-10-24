@@ -8,16 +8,13 @@ import { defaultConfig, type Config } from "../src/config";
 import { print, plain } from "../src/core/markup";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { createLoader, SyntaxCache } from "../src/syntax/languages";
+import { createLoader, SyntaxSessions } from "../src/syntax/languages";
 import { RustRegexEngine } from "../src/core/rx";
 import { setRegexEngine } from "../src/core/regex";
 
 const root = resolve(import.meta.dir, "..");
 setRegexEngine(await RustRegexEngine.load(readFileSync(resolve(root, "regex/regex.wasm"))));
-const syntaxCache = new SyntaxCache(
-  await createLoader(readFileSync(resolve(root, "tree-sitter/tree-sitter.wasm"))),
-  1,
-);
+const syntaxSessions = new SyntaxSessions(await createLoader(readFileSync(resolve(root, "tree-sitter/tree-sitter.wasm"))));
 
 export interface RunResult {
   text?: string;
@@ -50,8 +47,15 @@ export function makeHost(markup: string) {
 
 export function run(markup: string, keys: string, editor = makeEditor(), lang?: "markdown"): RunResult {
   const host = makeHost(markup);
-  if (lang) editor.syntax = (h) => syntaxCache.get("harness", h.state.doc);
-  host.onChanges = (changes) => editor.docChanged(host, changes);
+  syntaxSessions.clear();
+  if (lang) {
+    syntaxSessions.open(host, host.state.doc);
+    editor.syntax = (h) => syntaxSessions.get(h, h.state.doc);
+  }
+  host.onChanges = (changes, oldDoc) => {
+    if (lang) syntaxSessions.change(host, oldDoc, changes, host.state.doc);
+    editor.docChanged(host, changes);
+  };
   try {
     editor.feedKeys(host, keys);
   } catch (err) {

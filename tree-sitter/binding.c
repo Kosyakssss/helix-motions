@@ -21,11 +21,16 @@ EXPORT(hm_symbol_name) const char *hm_symbol_name(const TSLanguage *language, ui
 }
 
 EXPORT(hm_parse)
-TSTree *hm_parse(const TSLanguage *language, const char *text, uint32_t length, const TSRange *ranges, uint32_t count) {
+TSTree *hm_parse(const TSLanguage *language, const char *text, uint32_t length, const TSRange *ranges, uint32_t count, const TSTree *old_tree) {
   if (!parser) parser = ts_parser_new();
   if (!ts_parser_set_language(parser, language)) return NULL;
   if (!ts_parser_set_included_ranges(parser, count ? ranges : NULL, count)) return NULL;
-  return ts_parser_parse_string(parser, NULL, text, length);
+  return ts_parser_parse_string(parser, old_tree, text, length);
+}
+
+EXPORT(hm_tree_edit) void hm_tree_edit(TSTree *tree, uint32_t start, uint32_t old_end, uint32_t new_end) {
+  TSInputEdit edit = {start, old_end, new_end, {0, 0}, {0, 0}, {0, 0}};
+  ts_tree_edit(tree, &edit);
 }
 
 EXPORT(hm_tree_delete) void hm_tree_delete(TSTree *tree) { ts_tree_delete(tree); }
@@ -89,8 +94,17 @@ EXPORT(hm_query_predicates) const TSQueryPredicateStep *hm_query_predicates(cons
   return ts_query_predicates_for_pattern(query, pattern, length);
 }
 
-EXPORT(hm_query_matches)
-uint32_t hm_query_matches(const TSQuery *query, const TSNode *node, uint32_t *buffer, uint32_t capacity) {
+EXPORT(hm_injection_matches)
+uint32_t hm_injection_matches(
+  const TSQuery *query,
+  const TSNode *node,
+  const uint8_t *modes,
+  uint32_t content_id,
+  uint32_t language_id,
+  uint32_t shebang_id,
+  uint32_t *buffer,
+  uint32_t capacity
+) {
   if (!query_cursor) {
     query_cursor = ts_query_cursor_new();
     ts_query_cursor_set_match_limit(query_cursor, 256);
@@ -99,17 +113,44 @@ uint32_t hm_query_matches(const TSQuery *query, const TSNode *node, uint32_t *bu
   uint32_t used = 0;
   TSQueryMatch match;
   while (ts_query_cursor_next_match(query_cursor, &match)) {
-    uint32_t size = 2 + match.capture_count * 7;
-    if (used + size <= capacity) {
-      buffer[used] = match.pattern_index;
-      buffer[used + 1] = match.capture_count;
-      for (uint16_t i = 0; i < match.capture_count; i++) {
-        uint32_t *slot = buffer + used + 2 + i * 7;
-        slot[0] = match.captures[i].index;
-        *(TSNode *)(slot + 1) = match.captures[i].node;
+    uint32_t lang_start = UINT32_MAX, lang_end = UINT32_MAX, shebang = 0;
+    for (uint16_t i = 0; i < match.capture_count; i++) {
+      if (match.captures[i].index == language_id) {
+        lang_start = ts_node_start_byte(match.captures[i].node);
+        lang_end = ts_node_end_byte(match.captures[i].node);
+      } else if (match.captures[i].index == shebang_id) {
+        shebang = 1;
       }
     }
-    used += size;
+    for (uint16_t i = 0; i < match.capture_count; i++) {
+      if (match.captures[i].index != content_id) continue;
+      TSNode content = match.captures[i].node;
+      uint8_t mode = modes[match.pattern_index];
+      uint32_t children = ts_node_child_count(content);
+      uint32_t header = used;
+      uint32_t excluded = 0;
+      used += 8;
+      for (uint32_t c = 0; c < children; c++) {
+        TSNode child = ts_node_child(content, c);
+        if (mode == 1 || (mode == 2 && !ts_node_is_named(child))) continue;
+        if (used + 2 <= capacity) {
+          buffer[used] = ts_node_start_byte(child);
+          buffer[used + 1] = ts_node_end_byte(child);
+        }
+        used += 2;
+        excluded++;
+      }
+      if (header + 8 <= capacity) {
+        buffer[header] = match.pattern_index;
+        buffer[header + 1] = ts_node_start_byte(content);
+        buffer[header + 2] = ts_node_end_byte(content);
+        buffer[header + 3] = lang_start;
+        buffer[header + 4] = lang_end;
+        buffer[header + 5] = shebang;
+        buffer[header + 6] = excluded;
+        buffer[header + 7] = 0;
+      }
+    }
   }
   return used;
 }

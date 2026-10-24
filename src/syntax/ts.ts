@@ -5,7 +5,18 @@ interface Exports {
   hm_free(ptr: number): void;
   hm_language(which: number): number;
   hm_symbol_name(language: number, symbol: number): number;
-  hm_parse(language: number, text: number, length: number, ranges: number, count: number): number;
+  hm_parse(language: number, text: number, length: number, ranges: number, count: number, oldTree: number): number;
+  hm_tree_edit(tree: number, start: number, oldEnd: number, newEnd: number): void;
+  hm_injection_matches(
+    query: number,
+    node: number,
+    modes: number,
+    content: number,
+    language: number,
+    shebang: number,
+    buffer: number,
+    capacity: number,
+  ): number;
   hm_tree_delete(tree: number): void;
   hm_tree_root(tree: number, out: number): void;
   hm_node_start(node: number): number;
@@ -32,7 +43,6 @@ interface Exports {
   hm_query_capture_name(query: number, index: number, length: number): number;
   hm_query_string(query: number, index: number, length: number): number;
   hm_query_predicates(query: number, pattern: number, length: number): number;
-  hm_query_matches(query: number, node: number, buffer: number, capacity: number): number;
 }
 
 const NODE_WORDS = 6;
@@ -208,8 +218,12 @@ export interface ByteRange {
 export class Tree {
   constructor(
     readonly rt: Runtime,
-    private ptr: number,
+    readonly ptr: number,
   ) {}
+
+  edit(start: number, oldEnd: number, newEnd: number): void {
+    this.rt.x.hm_tree_edit(this.ptr, start, oldEnd, newEnd);
+  }
 
   get rootNode(): Node {
     this.rt.x.hm_tree_root(this.ptr, this.rt.outPtr);
@@ -221,8 +235,7 @@ export class Tree {
   }
 
   delete(): void {
-    if (this.ptr) this.rt.x.hm_tree_delete(this.ptr);
-    this.ptr = 0;
+    this.rt.x.hm_tree_delete(this.ptr);
   }
 }
 
@@ -270,7 +283,7 @@ export class TreeCursor {
 export class Parser {
   constructor(readonly rt: Runtime) {}
 
-  parse(language: Language, text: number, length: number, ranges: ByteRange[] | null): Tree | null {
+  parse(language: Language, text: number, length: number, ranges: ByteRange[] | null, oldTree: Tree | null = null): Tree | null {
     const rt = this.rt;
     let rangesPtr = 0;
     if (ranges && ranges.length > 0) {
@@ -281,29 +294,16 @@ export class Parser {
         words.set([0, 0, 0, 0, range.start, range.end], base);
       });
     }
-    const tree = rt.x.hm_parse(language.ptr, text, length, rangesPtr, ranges?.length ?? 0);
+    const tree = rt.x.hm_parse(language.ptr, text, length, rangesPtr, ranges?.length ?? 0, oldTree?.ptr ?? 0);
     if (rangesPtr) rt.x.hm_free(rangesPtr);
     return tree ? new Tree(rt, tree) : null;
   }
 }
 
-export interface QueryCapture {
-  name: string;
-  node: Node;
-}
-
-export interface QueryMatch {
-  patternIndex: number;
-  captures: QueryCapture[];
-  setProperties: Record<string, string | null>;
-}
-
 export class Query {
-  private readonly ptr: number;
-  private readonly captureNames: string[] = [];
+  readonly ptr: number;
+  readonly captureNames: string[] = [];
   private readonly properties: Record<string, string | null>[] = [];
-  private buffer = 0;
-  private capacity = 0;
 
   constructor(
     readonly rt: Runtime,
@@ -341,30 +341,71 @@ export class Query {
     }
   }
 
-  matches(node: Node): QueryMatch[] {
+  patternProperties(): Record<string, string | null>[] {
+    return this.properties;
+  }
+}
+
+export interface InjectionMatch {
+  pattern: number;
+  start: number;
+  end: number;
+  languageRange: [number, number] | null;
+  shebang: boolean;
+  excluded: [number, number][];
+}
+
+export class InjectionQuery {
+  private readonly modes: number;
+  private readonly ids: [number, number, number];
+  private buffer = 0;
+  private capacity = 0;
+
+  constructor(
+    readonly rt: Runtime,
+    readonly query: Query,
+  ) {
+    const props = query.patternProperties();
+    this.modes = rt.alloc(
+      new Uint8Array(props.map((p) => ("injection.include-children" in p ? 1 : "injection.include-unnamed-children" in p ? 2 : 0))),
+    );
+    const id = (name: string) => {
+      const i = query.captureNames.indexOf(name);
+      return i < 0 ? 0xffffffff : i;
+    };
+    this.ids = [id("injection.content"), id("injection.language"), id("injection.shebang")];
+  }
+
+  properties(pattern: number): Record<string, string | null> {
+    return this.query.patternProperties()[pattern] ?? {};
+  }
+
+  matches(node: Node): InjectionMatch[] {
     const rt = this.rt;
     let used: number;
     for (;;) {
       rt.writeNode(rt.inPtr, node);
-      used = rt.x.hm_query_matches(this.ptr, rt.inPtr, this.buffer, this.capacity);
+      used = rt.x.hm_injection_matches(this.query.ptr, rt.inPtr, this.modes, this.ids[0], this.ids[1], this.ids[2], this.buffer, this.capacity);
       if (used <= this.capacity) break;
       if (this.buffer) rt.x.hm_free(this.buffer);
       this.capacity = used * 2;
       this.buffer = rt.x.hm_malloc(this.capacity * 4);
     }
     const words = rt.u32().slice(this.buffer >> 2, (this.buffer >> 2) + used);
-    const out: QueryMatch[] = [];
-    let i = 0;
-    while (i < used) {
-      const patternIndex = words[i]!;
-      const count = words[i + 1]!;
-      const captures: QueryCapture[] = [];
-      for (let c = 0; c < count; c++) {
-        const slot = i + 2 + c * 7;
-        captures.push({ name: this.captureNames[words[slot]!]!, node: new Node(rt, words.slice(slot + 1, slot + 7)) });
-      }
-      out.push({ patternIndex, captures, setProperties: this.properties[patternIndex] ?? {} });
-      i += 2 + count * 7;
+    const out: InjectionMatch[] = [];
+    for (let i = 0; i < used; ) {
+      const count = words[i + 6]!;
+      const excluded: [number, number][] = [];
+      for (let e = 0; e < count; e++) excluded.push([words[i + 8 + e * 2]!, words[i + 9 + e * 2]!]);
+      out.push({
+        pattern: words[i]!,
+        start: words[i + 1]!,
+        end: words[i + 2]!,
+        languageRange: words[i + 3] === 0xffffffff ? null : [words[i + 3]!, words[i + 4]!],
+        shebang: words[i + 5] === 1,
+        excluded,
+      });
+      i += 8 + count * 2;
     }
     return out;
   }

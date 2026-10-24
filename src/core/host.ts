@@ -31,11 +31,11 @@ export class HeadlessHost implements Host {
     this.state = EditorState.create({ doc, extensions, selection: EditorSelection.cursor(0) });
     this.name = "[scratch]";
   }
-  onChanges: ((changes: import("@codemirror/state").ChangeSet) => void) | null = null;
+  onChanges: ((changes: import("@codemirror/state").ChangeSet, oldDoc: Text) => void) | null = null;
   dispatch(...specs: TransactionSpec[]): void {
     const tr = this.state.update(...specs);
     this.state = tr.state;
-    if (tr.docChanged) this.onChanges?.(tr.changes);
+    if (tr.docChanged) this.onChanges?.(tr.changes, tr.startState.doc);
   }
 }
 

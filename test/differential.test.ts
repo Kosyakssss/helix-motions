@@ -25,12 +25,9 @@ test("markdown suite matches Helix with the markdown syntax tree", async () => {
   expect(failures.map(describe)).toEqual([]);
 }, 1_800_000);
 
-const INCREMENTAL_PARSE_GAPS = new Set(["|---|---|\n| a | b |, *#[i|]#t*\n| a | b |#tag » [[wiki]]\n\u0000i(<esc>mrm'<A-b>i‘<esc>"]);
-
 for (const seed of [1, 2, 3]) {
   test(`markdown fuzz seed ${seed} matches Helix`, async () => {
-    const cases = markdownFuzzSuite(2000, seed).filter((c) => !INCREMENTAL_PARSE_GAPS.has(`${c.in}\u0000${c.keys}`));
-    const { failures } = await compare(cases);
+    const { failures } = await compare(markdownFuzzSuite(2000, seed));
     expect(failures.map(describe)).toEqual([]);
   }, 1_800_000);
 }
