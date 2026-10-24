@@ -5,6 +5,8 @@ export interface StatuslineConfig {
   center: string[];
   right: string[];
   separator: string;
+  diagnostics: string[];
+  workspaceDiagnostics: string[];
   modeNormal: string;
   modeInsert: string;
   modeSelect: string;
@@ -73,6 +75,8 @@ export function defaultConfig(): Config {
       center: [],
       right: ["diagnostics", "selections", "register", "position", "file-encoding"],
       separator: "│",
+      diagnostics: ["warning", "error"],
+      workspaceDiagnostics: ["warning", "error"],
       modeNormal: "NOR",
       modeInsert: "INS",
       modeSelect: "SEL",

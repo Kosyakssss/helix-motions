@@ -154,8 +154,44 @@
   background: var(--background-modifier-hover);
 }
 
-.hx-status span + span {
-  margin-left: 0.6em;
+.status-bar-item.hx-status {
+  order: -1;
+  position: relative;
+  min-width: var(--hx-status-width, 0px);
+  white-space: pre;
+  gap: 0.6em;
+}
+
+.hx-status-group:empty {
+  display: none;
+}
+
+.hx-status-strip {
+  position: absolute;
+  right: calc(100% + var(--size-4-2));
+  bottom: 0;
+  display: flex;
+  gap: 0.6em;
+  max-width: 60vw;
+  padding: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background-color: var(--background-secondary);
+  border: var(--status-bar-border-width) solid var(--status-bar-border-color);
+  border-radius: var(--status-bar-radius);
+  color: var(--status-bar-text-color);
+}
+
+.hx-status-strip.hx-hidden {
+  display: none;
+}
+
+.hx-status-warning {
+  color: var(--text-warning);
+}
+
+.hx-status-separator {
+  color: var(--text-faint);
 }
 
 .hx-status-mode {

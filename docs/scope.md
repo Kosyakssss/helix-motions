@@ -78,9 +78,9 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `format_selections` | skip | No formatter in Obsidian. |
 | `toggle_comments`, `toggle_line_comments`, `toggle_block_comments` | adapt | `comment.rs` logic. Markdown has only the block token `%% %%` (Obsidian comments). In code blocks use the fence language's tokens. |
 | `increment`, `decrement` | port | `increment/`: numbers and dates. |
-| `undo`, `redo` | adapt | CM6 history. Mode changes call `isolateHistory`, so one insert session is one undo step, as in Helix. |
-| `earlier`, `later` | adapt | CM6 history is linear, no undo tree. These act as repeated undo/redo. |
-| `commit_undo_checkpoint` | adapt | `isolateHistory`. |
+| `undo`, `redo` | port | `history.rs` revision tree; one insert session is one revision, as in Helix. |
+| `earlier`, `later` | port | `history.rs` revision tree, steps and time spans. |
+| `commit_undo_checkpoint` | port | Commits the pending revision. |
 
 ### Modes
 
@@ -230,7 +230,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `:move`, `:mv` and `!` forms | adapt | `fileManager.renameFile`, updates links. |
 | `:read`, `:r` | adapt | Insert a vault file's text. |
 | `:goto`, `:g` | port | Line number. |
-| `:earlier`, `:ear`, `:later`, `:lat` | adapt | Linear history. Step counts work. Time spans map to history events by time. |
+| `:earlier`, `:ear`, `:later`, `:lat` | port | Steps and time spans on the `history.rs` revision tree. |
 | `:yank-join` | port | Registers. |
 | `:clipboard-yank`, `:clipboard-yank-join`, `:clipboard-paste-after`, `:clipboard-paste-before`, `:clipboard-paste-replace` | adapt | System clipboard, as for `+`. |
 | `:primary-clipboard-yank`, `:primary-clipboard-yank-join`, `:primary-clipboard-paste-after`, `:primary-clipboard-paste-before`, `:primary-clipboard-paste-replace` | adapt | Same as `*` register above. |
@@ -277,7 +277,7 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 | `search.smart-case`, `search.wrap-around` | port | Search. |
 | `cursor-shape.normal/insert/select` | adapt | CSS block, bar, underline, hidden. |
 | `color-modes` | adapt | Mode colour in the status item. |
-| `statusline.*` | adapt | Elements we can fill: `mode`, `file-name`, `file-base-name`, `file-absolute-path`, `file-modification-indicator`, `position`, `position-percentage`, `total-line-numbers`, `selections`, `primary-selection-length`, `register`, `separator`, `spacer`, `mode.*` texts. Others render empty. |
+| `statusline.*` | adapt | One block at the left end of Obsidian's status bar: `left`, then `center`, then `right`, with Helix's text for each element. Elements with Obsidian data: `mode`, `file-name`, `file-base-name`, `file-absolute-path`, `file-modification-indicator` (unsaved changes), `file-line-ending` (LF), `file-indent-style` (Obsidian's indent setting), `file-type` (markdown), `diagnostics` and `workspace-diagnostics` (unresolved links as warnings, filtered by `statusline.diagnostics` and `statusline.workspace-diagnostics`), `selections`, `primary-selection-length`, `position`, `position-percentage`, `total-line-numbers`, `register`, `current-working-directory` (vault name), `separator`, `spacer`, and the `mode.*` texts. Empty, as in Helix without them: `spinner` (LSP), `version-control`, `read-only-indicator`, `file-encoding` (UTF-8), `code-action-hint`. Messages, pending keys and the macro register show in a strip to the left of the bar, in place of Helix's command line row, so they never move the bar. The block keeps its widest size, so the mode stays in place. |
 | `auto-info` | adapt | Which-key panel. |
 | `auto-pairs` | port | `auto_pairs.rs`, full. Plugin option picks Helix's (default) or Obsidian's. With Helix's on, Obsidian's auto-pair settings are bypassed. |
 | `smart-tab.*` | port | Applies when the Helix insert-keys option is on. |

@@ -101,7 +101,7 @@ const checks: Check[] = [
   {
     name: "Live Preview reveals markup inside the Helix selection",
     run: () => {
-      ob("eval", 'code=app.workspace.getActiveViewOfType(require("obsidian").MarkdownView).setState({mode:"source",source:false},{history:false})');
+      ob("eval", 'code=app.workspace.activeLeaf.view.setState({mode:"source",source:false},{history:false})');
       setDoc("plain #[t|]#ext and **bold** end\n");
       const hidden = dom("return v.contentDOM.innerText.includes('**')") as boolean;
       expectEq("markup hidden while selection is outside", hidden, false);

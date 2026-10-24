@@ -92,7 +92,7 @@ interface Unresolved {
   target: string;
 }
 
-function unresolvedIn(app: App, file: TFile): Unresolved[] {
+export function unresolvedIn(app: App, file: TFile): Unresolved[] {
   const cache = app.metadataCache.getFileCache(file);
   const refs = [...(cache?.links ?? []), ...(cache?.embeds ?? [])];
   return refs

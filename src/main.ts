@@ -146,8 +146,10 @@ export default class HelixMotionsPlugin extends Plugin {
       this.app.vault.on("modify", (file) => {
         this.lastModified = this.lastModified.filter((p) => p !== file.path);
         this.lastModified.push(file.path);
+        this.refreshStatus();
       }),
     );
+    this.registerEvent(this.app.metadataCache.on("resolved", () => this.refreshStatus()));
     const onConfigFile = (file: { path: string }, oldPath?: string) => {
       if (file.path === this.configPath() || oldPath === this.configPath()) void this.reloadConfig();
     };

@@ -202,7 +202,9 @@ function applyEditor(config: Config, editor: Record<string, unknown>, warnings: 
             if (typeof m.normal === "string") config.statusline.modeNormal = m.normal;
             if (typeof m.insert === "string") config.statusline.modeInsert = m.insert;
             if (typeof m.select === "string") config.statusline.modeSelect = m.select;
-          } else if (k !== "diagnostics" && k !== "workspace-diagnostics") warnings.push(`editor.statusline.${k}: not supported`);
+          } else if ((k === "diagnostics" || k === "workspace-diagnostics") && Array.isArray(v)) {
+            config.statusline[k === "diagnostics" ? "diagnostics" : "workspaceDiagnostics"] = v.map(String);
+          } else warnings.push(`editor.statusline.${k}: not supported`);
         }
         break;
       }
