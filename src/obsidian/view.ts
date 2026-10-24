@@ -13,7 +13,8 @@ import type { HelixEditor } from "../core/editor";
 import type { Host } from "../core/host";
 import { keyFromDom } from "../keys";
 import { search, type TrieNode } from "../keymap/trie";
-import { nextGraphemeBoundary, prevGraphemeBoundary } from "../graphemes";
+import { nextGraphemeBoundary } from "../graphemes";
+import { cursorLayers } from "./cursor";
 import { helixField, helixOwned, historyField, setHelix, syncNativeSelection, toNative } from "../state";
 import { hookInsert } from "../auto-pairs";
 import { autoPairsFor, insertDiffers, mayAutoPair } from "../commands/insert";
@@ -34,21 +35,6 @@ export interface ViewEnv {
   onDocTransaction(view: EditorView, tr: import("@codemirror/state").Transaction): void;
   onViewOpen(view: EditorView): void;
   onViewClose(view: EditorView): void;
-}
-
-class EolCursor extends WidgetType {
-  constructor(readonly cls: string) {
-    super();
-  }
-  override eq(other: EolCursor): boolean {
-    return other.cls === this.cls;
-  }
-  toDOM(): HTMLElement {
-    return createSpan({ cls: this.cls, text: " " });
-  }
-  override ignoreEvent(): boolean {
-    return false;
-  }
 }
 
 class LabelWidget extends WidgetType {
@@ -97,40 +83,6 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
   if (!value) return Decoration.none;
   const doc = state.doc;
   const builder: { from: number; to: number; deco: Decoration }[] = [];
-  const shape = env.editor.config.cursorShape[value.mode];
-  const visible = view.visibleRanges;
-  const vFrom = visible.length > 0 ? visible[0]!.from : 0;
-  const vTo = visible.length > 0 ? visible[visible.length - 1]!.to : doc.length;
-  const block = shape === "block";
-  value.selection.ranges.forEach((range, i) => {
-    if (range.to() < vFrom || range.from() > vTo) return;
-    const primary = i === value.selection.primaryIndex;
-    if (value.mode === "insert") {
-      const r = range.minWidth1(doc);
-      let from: number;
-      let to: number;
-      if (r.head > r.anchor) {
-        from = r.anchor;
-        to = prevGraphemeBoundary(doc, r.head);
-      } else {
-        const cursorEnd = nextGraphemeBoundary(doc, r.head);
-        from = primary && !block && cursorEnd !== r.anchor ? r.head : cursorEnd;
-        to = r.anchor;
-      }
-      if (to > from) {
-        builder.push({ from: Math.max(from, vFrom), to: Math.min(to, vTo), deco: Decoration.mark({ class: "hx-sel" }) });
-      }
-    }
-    if (value.mode === "insert" && primary && shape === "bar") return;
-    const cursor = range.cursor(doc);
-    const cls = `hx-cursor hx-cursor-${primary ? shape : "block"}${primary ? " hx-cursor-primary" : ""}`;
-    const line = doc.lineAt(cursor);
-    if (cursor >= doc.length || cursor === line.to) {
-      builder.push({ from: cursor, to: cursor, deco: Decoration.widget({ widget: new EolCursor(`${cls} hx-eol`), side: 1 }) });
-    } else {
-      builder.push({ from: cursor, to: nextGraphemeBoundary(doc, cursor), deco: Decoration.mark({ class: cls }) });
-    }
-  });
   const labels = [...(env.editor.jumpLabels.get(env.hostFor(view).id) ?? [])].sort((x, y) => x.pos - y.pos);
   const groups: { pos: number; end: number; text: string }[] = [];
   for (const label of labels) {
@@ -387,6 +339,7 @@ export function helixExtension(env: ViewEnv): Extension {
     pasteHandler,
     autoPairsInput,
     decorations,
+    cursorLayers(editor),
     cursorLine,
     attributes,
     scrollMargins,

@@ -15,39 +15,73 @@
   display: none;
 }
 
-.hx .hx-sel {
+.hx .cm-selectionLayer {
+  display: none;
+}
+
+::highlight(hx-sel) {
   background-color: var(--text-selection);
 }
 
-.hx .hx-cursor-block {
-  background-color: color-mix(in srgb, var(--text-normal) 45%, transparent);
-  color: var(--background-primary);
+.cm-layer .hx-cell {
+  position: absolute;
+  left: var(--hx-cell-left);
+  top: var(--hx-cell-top);
+  width: var(--hx-cell-width);
+  height: var(--hx-cell-height);
   border-radius: 1px;
+  pointer-events: none;
 }
 
-.hx span.hx-cursor::selection,
-.hx span.hx-cursor ::selection {
-  background: transparent;
+.cm-layer .hx-cell-sq-tl {
+  border-top-left-radius: 0;
 }
 
-.hx .hx-cursor-block.hx-cursor-primary {
+.cm-layer .hx-cell-sq-tr {
+  border-top-right-radius: 0;
+}
+
+.cm-layer .hx-cell-sq-bl {
+  border-bottom-left-radius: 0;
+}
+
+.cm-layer .hx-cell-sq-br {
+  border-bottom-right-radius: 0;
+}
+
+.cm-layer .hx-cell-block {
+  background-color: color-mix(in srgb, var(--text-normal) 45%, var(--background-primary));
+}
+
+.cm-layer .hx-cell-block.hx-cell-primary {
   background-color: var(--text-normal);
 }
 
-.hx .hx-cursor-underline {
+.cm-layer .hx-cell-underline {
   box-shadow: inset 0 -2px 0 var(--text-normal);
 }
 
-.hx .hx-cursor-bar {
+.cm-layer .hx-cell-bar {
   box-shadow: inset 2px 0 0 var(--text-normal);
 }
 
-.hx .hx-cursor-hidden {
-  background: none;
+.cm-layer .hx-cell-sel {
+  background-color: var(--text-selection);
+  border-radius: 0;
 }
 
-.hx span.hx-cursor {
+.cm-layer .hx-cell-glyph {
+  position: absolute;
+  left: 0;
+  top: var(--hx-glyph-top);
+  height: var(--hx-glyph-height);
+  font: var(--hx-glyph-font);
+  line-height: var(--hx-glyph-height);
+  letter-spacing: var(--hx-glyph-spacing);
+  font-feature-settings: var(--hx-glyph-features);
+  font-variation-settings: var(--hx-glyph-variations);
   white-space: pre;
+  color: var(--background-primary);
 }
 
 .hx .hx-jump-anchor {
@@ -118,12 +152,6 @@
 
 .hx-autoinfo-unavailable {
   opacity: 0.45;
-}
-
-.hx span.hx-cursor.hx-eol,
-.hx span.hx-cursor-block:empty {
-  display: inline-block;
-  min-width: 0.6em;
 }
 
 .hx-prompt {
@@ -218,7 +246,7 @@
 
 .hx-status-strip {
   position: absolute;
-  top: 0;
+  top: calc(-1 * var(--hx-bar-border-width, 0px));
   bottom: 0;
   right: 100%;
   display: flex;
@@ -229,14 +257,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
   background-color: var(--status-bar-background, var(--background-secondary));
-  border-top: var(--status-bar-border-width) solid var(--status-bar-border-color);
-  border-left: var(--status-bar-border-width) solid var(--status-bar-border-color);
+  border-top: var(--hx-bar-border-width, 0px) solid var(--hx-bar-border-color, transparent);
+  border-left: var(--hx-bar-border-width, 0px) solid var(--hx-bar-border-color, transparent);
   border-top-left-radius: var(--hx-bar-radius, 0px);
   color: var(--status-bar-text-color);
 }
 
 .hx-status-strip.hx-hidden {
   display: none;
+}
+
+.status-bar:has(.hx-status-strip:not(.hx-hidden)) {
+  border-top-left-radius: 0;
 }
 
 .hx-status-error {

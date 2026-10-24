@@ -101,6 +101,8 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
       "--hx-bar-pad-bottom": style.paddingBottom,
       "--hx-bar-pad-left": style.paddingLeft,
       "--hx-bar-radius": style.borderTopLeftRadius,
+      "--hx-bar-border-width": style.borderTopWidth,
+      "--hx-bar-border-color": style.borderTopColor,
     });
   }
   const strip = el.createDiv({ cls: "hx-status-strip" });

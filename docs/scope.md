@@ -1,6 +1,6 @@
 # Scope
 
-Source: `helix-editor/helix` master `ba40e54742`, files `book/src/generated/static-cmd.md`, `book/src/generated/typable-cmd.md`, `book/src/editor.md`, `helix-term/src/keymap/default.rs`.
+Source: `helix-editor/helix` master `ba40e54742` (behaviour: plus PR #16370, auto-pair spaces only inside `()` and `{}`), files `book/src/generated/static-cmd.md`, `book/src/generated/typable-cmd.md`, `book/src/editor.md`, `helix-term/src/keymap/default.rs`.
 
 Marks:
 
@@ -191,7 +191,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `.` repeat last insert | port | Hardcoded in `ui/editor.rs`, replays insert keys. |
 | Registers `"`, `/`, `:`, `@`, `_`, `#`, `.`, `%`, `+`, `*`, named | port | `register.rs`. `%` gives the vault path of the note. |
 | Mouse: click, drag, Alt-click adds a cursor | adapt | CM6 already sets selections. Map them to Helix ranges. Alt-click maps to CM6's own add-cursor click. |
-| Multiple cursors drawing | adapt | CM6 `drawSelection` with our block cursor. |
+| Multiple cursors drawing | adapt | Cursors are cells one row tall, drawn in a layer above the text, like a terminal cell; a corner is round only where no selection touches it. The primary selection is the native one; other selections are full-row rectangles under the text, plus a CSS highlight where the text has an opaque background (code). |
 | Sticky `Z` mode, `auto-info` popup | adapt | Small which-key panel in the editor. |
 | Status line | adapt | One Obsidian status bar item. See config. |
 
@@ -275,7 +275,7 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 | `jump-label-alphabet` | port | `gw`. |
 | `text-width` | port | `:reflow`. |
 | `search.smart-case`, `search.wrap-around` | port | Search. |
-| `cursor-shape.normal/insert/select` | adapt | CSS block, bar, underline, hidden. |
+| `cursor-shape.normal/insert/select` | adapt | Block, bar, underline or hidden cell, one row tall. |
 | `color-modes` | adapt | Mode colour in the status item. |
 | `statusline.*` | adapt | One block at the left end of Obsidian's status bar: `left`, then `center`, then `right`, with Helix's text for each element. Elements with Obsidian data: `mode`, `file-name`, `file-base-name`, `file-absolute-path`, `file-modification-indicator` (unsaved changes), `file-line-ending` (LF), `file-indent-style` (Obsidian's indent setting), `file-type` (markdown), `diagnostics` and `workspace-diagnostics` (unresolved links as warnings, filtered by `statusline.diagnostics` and `statusline.workspace-diagnostics`), `selections`, `primary-selection-length`, `position`, `position-percentage`, `total-line-numbers`, `register`, `current-working-directory` (vault name), `separator`, `spacer`, and the `mode.*` texts. Empty, as in Helix without them: `spinner` (LSP), `version-control`, `read-only-indicator`, `file-encoding` (UTF-8), `code-action-hint`. Messages, pending keys and the macro register show in a strip to the left of the bar, in place of Helix's command line row, so they never move the bar. The block keeps its widest size, so the mode stays in place. |
 | `auto-info` | adapt | Which-key panel. |
@@ -325,7 +325,7 @@ Options that Helix does not have. They live in the plugin's settings tab, not in
 3. `o` and `O` continue list markers.
 4. Insert keys: both, as an option (above).
 5. No text objects beyond Helix's. If Helix does not have it, we do not have it.
-6. We draw only what Obsidian can't: block cursors, insert-mode selection spans, `gw` labels, cursorline, the prompt and the which-key box. Selections in normal and select mode are Obsidian's native ones. Line numbers and indent guides are Obsidian's settings.
+6. We draw only what Obsidian can't: cursor cells, selections other than the primary one (and all of them in insert mode), `gw` labels, cursorline, the prompt and the which-key box. The primary selection in normal and select mode is Obsidian's native one. Line numbers and indent guides are Obsidian's settings.
 7. Helix options live in `helix.toml` only. The settings tab holds only choices Helix can't make.
 8. Desktop only.
 
