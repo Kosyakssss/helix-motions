@@ -39,7 +39,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | Command | Mark | Reason |
 | --- | --- | --- |
 | `select_all` | port | Trivial. |
-| `select_regex`, `split_selection`, `keep_selections`, `remove_selections` | adapt | Logic ports. The regex prompt is our own UI (see "Prompt"). JS `RegExp` replaces Rust `regex`, so a few syntax details differ. |
+| `select_regex`, `split_selection`, `keep_selections`, `remove_selections` | port | Logic ports. The regex prompt is our own UI (see "Prompt"). Patterns run on Helix's own regex engine (`regex-cursor` 0.1.5, `regex-automata` 0.4.14), compiled to WebAssembly. |
 | `split_selection_on_newline`, `merge_selections`, `merge_consecutive_selections` | port | `selection.rs`. |
 | `extend_line`, `extend_line_below`, `extend_line_above`, `select_line_above`, `select_line_below` | port | Line logic. |
 | `extend_to_line_bounds`, `shrink_to_line_bounds`, `trim_selections` | port | Line logic. |

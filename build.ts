@@ -41,7 +41,7 @@ async function build(): Promise<boolean> {
     target: "browser",
     external,
     plugins: [treeSitter],
-    footer: `/*\n${readFileSync(resolve(root, "tree-sitter/NOTICE"), "utf8").trimEnd()}\n*/`,
+    footer: `/*\n${["tree-sitter/NOTICE", "regex/NOTICE"].map((f) => readFileSync(resolve(root, f), "utf8").trimEnd()).join("\n\n")}\n*/`,
     sourcemap: process.argv.includes("--watch") ? "inline" : "none",
     minify: false,
   });

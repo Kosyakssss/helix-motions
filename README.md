@@ -49,7 +49,11 @@ Settings that Helix can't decide live in the settings tab: auto-pairs from Helix
 - **Files:** reads and writes `helix.toml` in the vault. `:w`, `:o`, `:move` and similar commands work on notes, as in Helix.
 - **Obsidian settings:** changes "Show line number" and "Show indentation guides" only when `helix.toml` sets `line-number`, `gutters` or `indent-guides`.
 - **Network:** none.
-- **WebAssembly:** `main.js` contains `tree-sitter/tree-sitter.wasm` (compressed): the tree-sitter C library, the two markdown grammars and a small binding (`tree-sitter/binding.c`). `tree-sitter/build.sh` builds it from pinned sources, and CI checks that the result is byte-identical to the committed file. `tree-sitter/NOTICE` has the licenses.
+- **WebAssembly:** `main.js` contains two compressed WebAssembly files, both built from pinned sources and checked byte for byte in CI:
+  - `tree-sitter/tree-sitter.wasm`: the tree-sitter C library, the two markdown grammars and a small binding (`tree-sitter/binding.c`), built by `tree-sitter/build.sh`.
+  - `regex/regex.wasm`: Helix's regex engine (`regex-cursor` and `regex-automata`, the same versions as Helix) with a small binding (`regex/src/lib.rs`), built by `regex/build.sh`.
+
+  `tree-sitter/NOTICE` and `regex/NOTICE` have the licenses.
 
 ## Credits
 

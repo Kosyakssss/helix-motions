@@ -14,7 +14,7 @@ import {
   lineStart,
   nextCharPos,
 } from "../core/text";
-import { compileRegex, docString, escapeRegex, findAt, findIter, isMatch } from "../core/regex";
+import { compilePattern, escapeRegex, type Pattern } from "../core/regex";
 import { apply, changeSetOf, docOf, exitSelectMode, lineRange, lineToChar, modeOf, selOf, setSel } from "./util";
 import type { CommandFn } from "./motion";
 
@@ -118,11 +118,10 @@ export function splitOnNewline(doc: Text, sel: Selection): Selection {
   return new Selection(result, 0);
 }
 
-export function selectOnMatches(doc: Text, sel: Selection, re: RegExp): Selection | null {
-  const s = docString(doc);
+export function selectOnMatches(doc: Text, sel: Selection, re: Pattern): Selection | null {
   const result: Range[] = [];
   for (const range of sel.ranges) {
-    for (const [start, end] of findIter(re, s, range.from(), range.to())) {
+    for (const [start, end] of re.findAll(doc, range.from(), range.to())) {
       const r = new Range(start, end);
       if (!(r.anchor === range.to() && r.head === range.to())) result.push(r);
     }
@@ -130,8 +129,7 @@ export function selectOnMatches(doc: Text, sel: Selection, re: RegExp): Selectio
   return result.length > 0 ? new Selection(result, 0) : null;
 }
 
-export function splitOnMatches(doc: Text, sel: Selection, re: RegExp): Selection {
-  const s = docString(doc);
+export function splitOnMatches(doc: Text, sel: Selection, re: Pattern): Selection {
   const result: Range[] = [];
   for (const range of sel.ranges) {
     if (range.from() === range.to()) {
@@ -140,7 +138,7 @@ export function splitOnMatches(doc: Text, sel: Selection, re: RegExp): Selection
     }
     const selEnd = range.to();
     let start = range.from();
-    for (const [mStart, mEnd] of findIter(re, s, range.from(), selEnd)) {
+    for (const [mStart, mEnd] of re.findAll(doc, range.from(), selEnd)) {
       result.push(new Range(start, mStart));
       start = mEnd;
     }
@@ -149,9 +147,8 @@ export function splitOnMatches(doc: Text, sel: Selection, re: RegExp): Selection
   return new Selection(result, 0);
 }
 
-export function keepOrRemoveMatches(doc: Text, sel: Selection, re: RegExp, remove: boolean): Selection | null {
-  const s = docString(doc);
-  const result = sel.ranges.filter((r) => isMatch(re, s, r.from(), r.to()) !== remove);
+export function keepOrRemoveMatches(doc: Text, sel: Selection, re: Pattern, remove: boolean): Selection | null {
+  const result = sel.ranges.filter((r) => re.isMatch(doc, r.from(), r.to()) !== remove);
   return result.length > 0 ? new Selection(result, 0) : null;
 }
 
@@ -349,7 +346,7 @@ export function regexPrompt(
   cx: Context,
   label: string,
   register: string,
-  onEvent: (cx: Context, re: RegExp, event: "update" | "validate") => void,
+  onEvent: (cx: Context, re: Pattern, event: "update" | "validate") => void,
 ): void {
   const editor = cx.editor;
   const host = cx.host;
@@ -363,15 +360,15 @@ export function regexPrompt(
       const re = compile(editor, input);
       const pcx = fresh();
       setSel(pcx, snapshot);
-      if (re) onEvent(pcx, re, "update");
+      if (!(re instanceof Error)) onEvent(pcx, re, "update");
     },
     onAccept: (input) => {
       if (input === "") return;
       const re = compile(editor, input);
       const pcx = fresh();
       setSel(pcx, snapshot);
-      if (!re) {
-        editor.setError(`Invalid regex: ${input}`);
+      if (re instanceof Error) {
+        editor.setError(re.message);
         return;
       }
       jumplistFor(pcx).push({ docId: host.id, selection: snapshot });
@@ -381,18 +378,18 @@ export function regexPrompt(
   });
 }
 
-function compile(editor: Context["editor"], input: string): RegExp | null {
+function compile(editor: Context["editor"], input: string): Pattern | Error {
   const insensitive = editor.config.search.smartCase ? ![...input].some((c) => isUppercase(c)) : false;
   try {
-    return compileRegex(input, insensitive);
-  } catch {
-    return null;
+    return compilePattern(input, insensitive);
+  } catch (err) {
+    return err as Error;
   }
 }
 
 export function searchImpl(
   cx: Context,
-  re: RegExp,
+  re: Pattern,
   movement: "move" | "extend",
   direction: "forward" | "backward",
   wrapAround: boolean,
@@ -400,16 +397,15 @@ export function searchImpl(
 ): void {
   const doc = docOf(cx);
   const sel = selOf(cx);
-  const s = docString(doc);
   const start =
     direction === "forward"
       ? ensureGraphemeBoundaryNext(doc, sel.primary().to())
       : ensureGraphemeBoundaryPrev(doc, sel.primary().from());
   let mat: [number, number] | null =
-    direction === "forward" ? findAt(re, s, start, s.length) : lastMatch(re, s, 0, start);
+    direction === "forward" ? re.find(doc, start, doc.length) : re.findLast(doc, 0, start);
   if (!mat) {
     if (wrapAround) {
-      mat = direction === "forward" ? findAt(re, s, 0, s.length) : lastMatch(re, s, start, s.length);
+      mat = direction === "forward" ? re.find(doc, 0, doc.length) : re.findLast(doc, start, doc.length);
     }
     if (showWarnings) {
       if (wrapAround && mat) cx.editor.setStatus("Wrapped around document");
@@ -431,12 +427,6 @@ export function searchImpl(
   setSel(cx, next, { scrollIntoView: true });
 }
 
-function lastMatch(re: RegExp, s: string, from: number, to: number): [number, number] | null {
-  let last: [number, number] | null = null;
-  for (const m of findIter(re, s, from, to)) last = m;
-  return last;
-}
-
 function searcher(cx: Context, direction: "forward" | "backward"): void {
   const reg = cx.register ?? "/";
   const wrapAround = cx.editor.config.search.wrapAround;
@@ -453,9 +443,9 @@ function searchNextOrPrev(cx: Context, movement: "move" | "extend", direction: "
   const query = cx.editor.registers.first(register, cx.editor.registerEnv(cx.host));
   if (query === null) return;
   const insensitive = cx.editor.config.search.smartCase ? ![...query].some((c) => isUppercase(c)) : false;
-  let re: RegExp;
+  let re: Pattern;
   try {
-    re = compileRegex(query, insensitive);
+    re = compilePattern(query, insensitive);
   } catch {
     cx.editor.setError(`Invalid regex: ${query}`);
     return;

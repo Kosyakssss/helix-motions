@@ -13,7 +13,8 @@ import { makeWorkspace, leafId } from "./obsidian/workspace";
 import { makeViewOps } from "./obsidian/viewops";
 import { renderStatus } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
-import { loadSyntax } from "./obsidian/syntax";
+import { loadRegex, loadSyntax } from "./obsidian/syntax";
+import { setRegexEngine } from "./core/regex";
 import type { SyntaxCache } from "./syntax/languages";
 import { SystemClipboard } from "./obsidian/clipboard";
 import { helixField } from "./state";
@@ -73,6 +74,9 @@ export default class HelixMotionsPlugin extends Plugin {
         this.helix.syntax = (host) => (host.view && !this.isConfigView(host.view) ? cache.get(host.view, host.state.doc) : null);
       })
       .catch((err: unknown) => console.error("Helix: syntax tree unavailable", err));
+    void loadRegex()
+      .then((engine) => setRegexEngine(engine))
+      .catch((err: unknown) => console.error("Helix: regex engine unavailable", err));
     this.helix.ui = {
       notify: () => this.refreshStatus(),
       render: (host) => this.refresh(host),

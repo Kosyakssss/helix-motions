@@ -9,8 +9,11 @@ import { print, plain } from "../src/core/markup";
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createLoader, SyntaxCache } from "../src/syntax/languages";
+import { RustRegexEngine } from "../src/core/rx";
+import { setRegexEngine } from "../src/core/regex";
 
 const root = resolve(import.meta.dir, "..");
+setRegexEngine(await RustRegexEngine.load(readFileSync(resolve(root, "regex/regex.wasm"))));
 const syntaxCache = new SyntaxCache(
   await createLoader(readFileSync(resolve(root, "tree-sitter/tree-sitter.wasm"))),
   1,

@@ -13,6 +13,7 @@ bun run dev          # rebuild on change and reload the plugin
 bun run check        # TypeScript
 bun run lint         # Obsidian's review rules
 sh tree-sitter/build.sh  # rebuild tree-sitter.wasm (downloads wasi-sdk once)
+sh regex/build.sh        # rebuild regex.wasm (needs rustup; installs Rust 1.99.1 with the wasm target)
 ```
 
 Open `test-vault` in Obsidian to try changes. Its `helix.toml` is a real-world config.

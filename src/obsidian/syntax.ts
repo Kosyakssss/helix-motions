@@ -1,5 +1,7 @@
-import packed from "../../tree-sitter/tree-sitter.wasm";
+import packedTreeSitter from "../../tree-sitter/tree-sitter.wasm";
+import packedRegex from "../../regex/regex.wasm";
 import { createLoader, SyntaxCache } from "../syntax/languages";
+import { RustRegexEngine } from "../core/rx";
 
 async function unpack(data: string): Promise<Uint8Array> {
   const bytes = Uint8Array.from(atob(data), (c) => c.charCodeAt(0));
@@ -8,5 +10,9 @@ async function unpack(data: string): Promise<Uint8Array> {
 }
 
 export async function loadSyntax(): Promise<SyntaxCache> {
-  return new SyntaxCache(await createLoader(await unpack(packed)));
+  return new SyntaxCache(await createLoader(await unpack(packedTreeSitter)));
+}
+
+export async function loadRegex(): Promise<RustRegexEngine> {
+  return RustRegexEngine.load(await unpack(packedRegex));
 }

@@ -21,6 +21,8 @@ jobs:
       - run: bun run lint
       - run: bun build.ts --out dist
       - run: sh tree-sitter/build.sh && git diff --exit-code tree-sitter
+      - run: rustup toolchain install 1.99.1 --profile minimal --target wasm32-unknown-unknown
+      - run: sh regex/build.sh && git diff --exit-code regex
 
   differential:
     runs-on: ubuntu-latest

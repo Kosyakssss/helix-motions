@@ -57,6 +57,9 @@ const EDITS = [
   "x:reflow 10<ret>", "%:reflow 8<ret>", ":char<ret>", ":set-register a hi<ret>\"ap",
   "ifoo<esc>:earlier<ret>", "ifoo<esc>u:later<ret>", ":clear-register<ret>",
   "<C-r>", "ix<C-r>\"<esc>", "yi<C-r>\"<esc>",
+  "%s\\d+<ret>", "%s\\w+<ret>", "%s[[:alpha:]]+<ret>", "%s(?x) l o<ret>", "%s(?=o)<ret>", "%s(o)\\1<ret>", "%s\\z<ret>",
+  "%s(?i)é<ret>", "%sSS<ret>", "%s\\b<ret>", "%s^<ret>", "%s$<ret>", "%s.<ret>", "%s\\pL+<ret>", "%s[^a-z]+<ret>",
+  "%Sx*<ret>", "%<A-s>K\\d<ret>", "%<A-s><A-K>\\p{Cyrillic}<ret>", "/\\d<ret>n", "?\\w+<ret>N", "/(?<ret>",
 ];
 
 export function handSuite(): Case[] {

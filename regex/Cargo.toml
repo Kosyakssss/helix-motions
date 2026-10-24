@@ -1,0 +1,18 @@
+[package]
+name = "helix-motions-regex"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+regex-cursor = { version = "=0.1.5", default-features = false, features = ["perf-inline"] }
+
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true
