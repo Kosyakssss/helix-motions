@@ -15,6 +15,8 @@ const TEXTS = {
   camel: "#[f|]#ooBarBaz someHTTPServer snake_case_name\n",
   numbers: "#[4|]#2 -7 0x1F 0b101 0o17 2021-11-24 007 1_000\n",
   markdown: "# Head#[i|]#ng\n\n- item one\n- item two\n  - nested\n1. first\n> quote line\n**bold** and *it* [[Link|alias]] `code`\n",
+  scripts: "#[न|]#मस्ते दुनिया क्षत्रिय (हिन्दी)\nবাংলা ক্ষ্ম สวัสดีครับ தமிழ்\n",
+  clusters: "#[ᄀ|]#ᅡᆨ 각 \u0600\u0661 👨‍👩‍👧‍👦 🇬🇪🇺🇸 e\u0301 a\u0903b\n",
 };
 
 const MOTIONS = [

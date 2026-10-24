@@ -1,9 +1,9 @@
 import { Range, Selection } from "../selection";
 
-const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
+import { segmentGraphemes } from "../graphemes";
 
 export function print(s: string): { text: string; selection: Selection } {
-  const gs = [...seg.segment(s)].map((g) => g.segment);
+  const gs = segmentGraphemes(s);
   let primary: number | null = null;
   const ranges: Range[] = [];
   let left = "";
@@ -40,14 +40,14 @@ export function print(s: string): { text: string; selection: Selection } {
         left += ch;
         continue;
       }
-      let prev = [...seg.segment(left)].pop()?.segment;
+      let prev = segmentGraphemes(left).pop();
       if (!headAtBeg) {
         if (prev !== "|") {
           left += ch;
           continue;
         }
         left = left.slice(0, -1);
-        prev = [...seg.segment(left)].pop()?.segment;
+        prev = segmentGraphemes(left).pop();
       }
       i++;
       if ((prev === "\n" || prev === "\r\n") && gs[i] === prev) i++;

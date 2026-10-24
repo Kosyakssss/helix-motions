@@ -6,6 +6,7 @@
 
 - `bun test`: runs the hand suite (3,528 cases), 5 fuzz seeds (~15,000 cases), the markdown suite (9,240 cases) and 3 markdown fuzz seeds (~6,000 cases) through the headless engine and compares with Helix. Results from Helix are cached in `test/oracle/cache.json` (not committed). Missing cases call Helix.
 - `bun test/oracle/diff.ts hand|fuzz|md|mdfuzz [filter]`: same, with a readable failure list.
+- Grapheme clusters: `src/graphemes.ts` ports Helix's `unicode-segmentation` 1.13.3 (Unicode 17). `bun scripts/grapheme-table.ts` regenerates `src/core/grapheme-table.ts` from the crate in the cargo registry. `bun test` compares about 78,000 strings with the crate itself.
 - `bun test/oracle/one.ts cases.json`: check a few `[markup, keys]` pairs.
 
 ## Inside Obsidian

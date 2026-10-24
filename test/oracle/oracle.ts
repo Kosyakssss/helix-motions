@@ -79,3 +79,15 @@ export async function oracleAsync(cases: Case[]): Promise<Map<string, OracleResu
   }
   return new Map(cases.map((c) => [c.id, cache[key(c)]!]));
 }
+
+export function oracleGraphemes(strings: string[]): number[][] {
+  const dir = mkdtempSync(join(tmpdir(), "hm-graphemes-"));
+  const input = join(dir, "in.json");
+  const output = join(dir, "out.json");
+  writeFileSync(input, JSON.stringify(strings));
+  Bun.spawnSync([oracleBinary(), "--test-threads=1", "-q", "graphemes::graphemes"], {
+    cwd: join(HELIX, "helix-term"),
+    env: { ...process.env, ORACLE_GRAPHEMES_IN: input, ORACLE_GRAPHEMES_OUT: output },
+  });
+  return JSON.parse(readFileSync(output, "utf8")) as number[][];
+}

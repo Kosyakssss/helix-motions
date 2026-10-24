@@ -2,9 +2,7 @@ import { keyChar } from "../keys";
 import type { HelixEditor, PromptRequest } from "./editor";
 import type { Host } from "./host";
 
-function graphemes(s: string): string[] {
-  return [...new Intl.Segmenter(undefined, { granularity: "grapheme" }).segment(s)].map((g) => g.segment);
-}
+import { segmentGraphemes as graphemes } from "../graphemes";
 
 function isWordChar(g: string): boolean {
   return /^[\p{Alphabetic}\p{Nd}_]/u.test(g);

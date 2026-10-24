@@ -164,3 +164,20 @@ mod widths {
         std::fs::write(path, serde_json::to_string(&serde_json::json!({"ranges": ranges, "presentation": presentation})).unwrap()).unwrap();
     }
 }
+
+#[cfg(feature = "integration")]
+mod graphemes {
+    use helix_core::unicode::segmentation::UnicodeSegmentation;
+
+    #[test]
+    fn graphemes() {
+        let Ok(input) = std::env::var("ORACLE_GRAPHEMES_IN") else { return };
+        let output = std::env::var("ORACLE_GRAPHEMES_OUT").unwrap();
+        let cases: Vec<String> = serde_json::from_str(&std::fs::read_to_string(input).unwrap()).unwrap();
+        let result: Vec<Vec<usize>> = cases
+            .iter()
+            .map(|s| s.graphemes(true).map(|g| g.chars().count()).collect())
+            .collect();
+        std::fs::write(output, serde_json::to_string(&result).unwrap()).unwrap();
+    }
+}

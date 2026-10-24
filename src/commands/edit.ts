@@ -1,6 +1,6 @@
 import type { Text } from "@codemirror/state";
 import type { Context } from "../core/editor";
-import { nextGraphemeBoundary, prevGraphemeBoundary } from "../graphemes";
+import { nextGraphemeBoundary, prevGraphemeBoundary, segmentGraphemes } from "../graphemes";
 import { Range, Selection } from "../selection";
 import { charAt, charIsLineEnding, isLowercase, isUppercase, lineIndex } from "../core/text";
 import { indentUnit, indentWidth } from "../config";
@@ -237,10 +237,11 @@ function replaceCommand(cx: Context): void {
     else ch = cx.editor.keyChar(key);
     if (ch === null) return;
     const doc = docOf(cx);
-    const seg = new Intl.Segmenter(undefined, { granularity: "grapheme" });
     changeBySelection(cx, (range) => {
       if (range.isEmpty()) return [range.from(), range.to(), null];
-      const text = [...seg.segment(doc.sliceString(range.from(), range.to()))].map(() => ch).join("");
+      const text = segmentGraphemes(doc.sliceString(range.from(), range.to()))
+        .map(() => ch)
+        .join("");
       return [range.from(), range.to(), text];
     });
     exitSelectMode(cx);
