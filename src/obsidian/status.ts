@@ -10,7 +10,7 @@ type Part = { text: string; cls?: string };
 function severityCounts(severities: string[], warnings: number, prefix: Part[]): Part[] {
   const parts: Part[] = [];
   for (const severity of severities) {
-    if (severity === "warning" && warnings > 0) parts.push({ text: "●", cls: "hx-status-warning" }, { text: ` ${warnings} ` });
+    if (severity === "warning" && warnings > 0) parts.push({ text: String(warnings), cls: "hx-status-diag hx-status-diag-warning" });
   }
   return parts.length > 0 ? [...prefix, ...parts] : [];
 }
@@ -31,60 +31,60 @@ function element(name: string, editor: HelixEditor, host: Host, view: MarkdownVi
   switch (name) {
     case "mode": {
       const mode = value.mode === "insert" ? sl.modeInsert : value.mode === "select" ? sl.modeSelect : sl.modeNormal;
-      return [{ text: ` ${mode} `, cls: `hx-status-mode hx-status-${value.mode}${editor.config.colorModes ? " hx-color" : ""}` }];
+      return [{ text: mode, cls: `hx-status-mode hx-status-${value.mode}${editor.config.colorModes ? " hx-color" : ""}` }];
     }
     case "file-name":
-      return [{ text: ` ${view?.file?.path ?? host.name} ` }];
+      return [{ text: view?.file?.path ?? host.name, cls: "hx-status-file" }];
     case "file-absolute-path": {
       const adapter = view?.app.vault.adapter;
       const base = adapter instanceof FileSystemAdapter ? adapter.getBasePath() : "";
-      return [{ text: ` ${view?.file ? `${base}/${view.file.path}` : host.name} ` }];
+      return [{ text: view?.file ? `${base}/${view.file.path}` : host.name, cls: "hx-status-file" }];
     }
     case "file-base-name":
-      return [{ text: ` ${view?.file?.name ?? host.name} ` }];
+      return [{ text: view?.file?.name ?? host.name, cls: "hx-status-file" }];
     case "file-modification-indicator":
-      return [{ text: (view as unknown as { dirty?: boolean } | null)?.dirty ? "[+]" : "   " }];
+      return [{ text: "[+]", cls: `hx-status-modified${(view as unknown as { dirty?: boolean } | null)?.dirty ? "" : " hx-status-clean"}` }];
     case "file-line-ending":
-      return [{ text: " LF " }];
+      return [{ text: "LF" }];
     case "file-indent-style": {
       const style = editor.config.indentStyle;
-      return [{ text: style.kind === "tabs" ? " tabs " : ` ${style.width} space${style.width === 1 ? "" : "s"} ` }];
+      return [{ text: style.kind === "tabs" ? "tabs" : `${style.width} space${style.width === 1 ? "" : "s"}` }];
     }
     case "file-type":
-      return [{ text: " markdown " }];
+      return [{ text: "markdown" }];
     case "diagnostics": {
       const warnings = view?.file ? unresolvedIn(view.app, view.file).length : 0;
       return severityCounts(sl.diagnostics, warnings, []);
     }
     case "workspace-diagnostics":
-      return view ? severityCounts(sl.workspaceDiagnostics, vaultWarnings(view), [{ text: " W " }]) : [];
+      return view ? severityCounts(sl.workspaceDiagnostics, vaultWarnings(view), [{ text: "W", cls: "hx-status-faint" }]) : [];
     case "selections": {
       const n = value.selection.ranges.length;
-      return [{ text: n === 1 ? " 1 sel " : ` ${value.selection.primaryIndex + 1}/${n} sels ` }];
+      return [{ text: n === 1 ? "1 sel" : `${value.selection.primaryIndex + 1}/${n} sels`, cls: "hx-status-num" }];
     }
     case "primary-selection-length": {
       const r = value.selection.primary();
       const chars = [...doc.sliceString(r.from(), r.to())].length;
-      return [{ text: ` ${chars} char${chars === 1 ? "" : "s"} ` }];
+      return [{ text: `${chars} char${chars === 1 ? "" : "s"}`, cls: "hx-status-num" }];
     }
     case "position": {
       const line = doc.lineAt(cursor);
       let col = 0;
       for (let pos = line.from; pos < cursor; pos = nextGraphemeBoundary(doc, pos)) col++;
-      return [{ text: ` ${line.number}:${col + 1} ` }];
+      return [{ text: `${line.number}:${col + 1}`, cls: "hx-status-num" }];
     }
     case "position-percentage":
-      return [{ text: `${Math.floor((doc.lineAt(cursor).number * 100) / doc.lines)}%` }];
+      return [{ text: `${Math.floor((doc.lineAt(cursor).number * 100) / doc.lines)}%`, cls: "hx-status-num" }];
     case "total-line-numbers":
-      return [{ text: ` ${doc.lines} ` }];
+      return [{ text: String(doc.lines), cls: "hx-status-num" }];
     case "register":
-      return editor.selectedRegister ? [{ text: ` reg=${editor.selectedRegister} ` }] : [];
+      return editor.selectedRegister ? [{ text: `reg=${editor.selectedRegister}` }] : [];
     case "current-working-directory":
       return view ? [{ text: view.app.vault.getName() }] : [];
     case "separator":
-      return [{ text: sl.separator, cls: "hx-status-separator" }];
+      return [{ text: sl.separator, cls: "hx-status-faint" }];
     case "spacer":
-      return [{ text: " " }];
+      return [{ text: "", cls: "hx-status-spacer" }];
     default:
       return [];
   }
@@ -97,18 +97,16 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
   if (editor.status) {
     strip.createSpan({ text: editor.status.message, cls: editor.status.severity === "error" ? "hx-status-error" : "hx-status-info" });
   }
-  const pending = editor.pendingDisplay() + (editor.count !== null ? String(editor.count) : "");
+  const pending = (editor.count !== null ? String(editor.count) : "") + editor.pendingDisplay();
   if (pending) strip.createSpan({ text: pending, cls: "hx-status-pending" });
   if (editor.macroRecording) strip.createSpan({ text: `[${editor.macroRecording.register}]`, cls: "hx-status-macro" });
   strip.toggleClass("hx-hidden", strip.childElementCount === 0);
   for (const group of [sl.left, sl.center, sl.right]) {
     const box = el.createSpan({ cls: "hx-status-group" });
     for (const name of group) {
-      for (const part of element(name, editor, host, view)) box.createSpan({ text: part.text, cls: part.cls });
+      for (const part of element(name, editor, host, view)) {
+        box.createSpan({ text: part.text, cls: part.cls });
+      }
     }
   }
-  el.setCssProps({ "--hx-status-width": "0px" });
-  const width = Math.max(el.offsetWidth, Number(el.dataset.width ?? 0));
-  el.dataset.width = String(width);
-  el.setCssProps({ "--hx-status-width": `${width}px` });
 }

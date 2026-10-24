@@ -216,6 +216,7 @@ export default class HelixMotionsPlugin extends Plugin {
         this.helix.config = loaded.config;
         this.helix.keymaps = buildKeymaps(loaded.keys);
         this.applyViewConfig();
+        this.refreshStatus();
       }
       return true;
     },
