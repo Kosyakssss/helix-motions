@@ -72,11 +72,13 @@ export function fromNative(
 }
 
 export function toNative(value: HelixState, doc: Text): EditorSelection {
-  const ranges = value.selection.ranges.map((r) =>
-    value.mode === "insert"
-      ? EditorSelection.cursor(r.cursor(doc), 0, undefined, r.goalColumn)
-      : EditorSelection.range(r.anchor, r.head, r.goalColumn),
-  );
+  const ranges = value.selection.ranges.map((r) => {
+    if (value.mode === "insert") return EditorSelection.cursor(r.cursor(doc), 0, undefined, r.goalColumn);
+    if (r.to() === r.from() + 1 && r.from() < doc.length && doc.lineAt(r.from()).to === r.from()) {
+      return EditorSelection.cursor(r.from(), 0, undefined, r.goalColumn);
+    }
+    return EditorSelection.range(r.anchor, r.head, r.goalColumn);
+  });
   return EditorSelection.create(ranges, value.selection.primaryIndex);
 }
 
