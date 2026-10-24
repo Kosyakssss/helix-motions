@@ -486,6 +486,31 @@ function incrementImpl(cx: Context, sign: 1 | -1): void {
   }
 }
 
+const SURROUND_HELP_TEXT: [string, string][] = [
+  ["m", "Nearest matching pair"],
+  ["( or )", "Parentheses"],
+  ["{ or }", "Curly braces"],
+  ["< or >", "Angled brackets"],
+  ["[ or ]", "Square brackets"],
+  [" ", "... or any character"],
+];
+
+const TEXTOBJECT_HELP_TEXT: [string, string][] = [
+  ["w", "Word"],
+  ["W", "WORD"],
+  ["p", "Paragraph"],
+  ["t", "Type definition (tree-sitter)"],
+  ["f", "Function (tree-sitter)"],
+  ["a", "Argument/parameter (tree-sitter)"],
+  ["c", "Comment (tree-sitter)"],
+  ["T", "Test (tree-sitter)"],
+  ["e", "Data structure entry (tree-sitter)"],
+  ["m", "Closest surrounding pair (tree-sitter)"],
+  ["g", "Change"],
+  ["x", "(X)HTML element (tree-sitter)"],
+  [" ", "... or any character acting as a pair"],
+];
+
 function surroundAdd(cx: Context): void {
   cx.onNextKey((cx, key) => {
     cx.editor.autoinfo = null;
@@ -510,6 +535,7 @@ function surroundAdd(cx: Context): void {
     apply(cx, changeSetOf(doc, changes), new Selection(ranges, sel.primaryIndex));
     exitSelectMode(cx);
   });
+  cx.editor.autoinfo = { title: "Surround selections with", body: SURROUND_HELP_TEXT.slice(1) };
 }
 
 function surroundReplace(cx: Context): void {
@@ -554,7 +580,9 @@ function surroundReplace(cx: Context): void {
       );
       exitSelectMode(cx);
     });
+    cx.editor.autoinfo = { title: "Replace with a pair of", body: SURROUND_HELP_TEXT.slice(1) };
   });
+  cx.editor.autoinfo = { title: "Replace surrounding pair of", body: SURROUND_HELP_TEXT };
 }
 
 function surroundDelete(cx: Context): void {
@@ -576,6 +604,7 @@ function surroundDelete(cx: Context): void {
     apply(cx, changeSetOf(doc, changePos.map((p) => [p, nextGraphemeBoundary(doc, p), null])));
     exitSelectMode(cx);
   });
+  cx.editor.autoinfo = { title: "Delete surrounding pair of", body: SURROUND_HELP_TEXT };
 }
 
 function selectTextobject(cx: Context, objtype: TextObject): void {
@@ -612,6 +641,7 @@ function selectTextobject(cx: Context, objtype: TextObject): void {
       );
     });
   });
+  cx.editor.autoinfo = { title: objtype === "inside" ? "Match inside" : "Match around", body: TEXTOBJECT_HELP_TEXT };
 }
 
 function matchBrackets(cx: Context): void {
