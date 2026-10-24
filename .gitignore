@@ -9,7 +9,7 @@ test-vault/.obsidian/graph.json
 test-vault/.obsidian/types.json
 test-vault/.trash
 .DS_Store
-test/oracle/cache.json
+test/oracle/cache-*.json
 test-vault/scratch.md
 test-vault/*
 !test-vault/Welcome.md

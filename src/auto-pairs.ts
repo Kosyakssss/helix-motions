@@ -97,6 +97,7 @@ function handleInsertWhitespace(doc: Text, range: Range, ch: string, pairs: Auto
   if (cur === null || prev === null) return null;
   const pair = pairs.get(cur);
   if (!pair || pair.open !== prev || pair.close !== cur) return null;
+  if (pair.open !== "(" && pair.open !== "{") return null;
   return handleInsertSame(doc, range, { open: ch, close: ch });
 }
 

@@ -2,9 +2,12 @@
 set -eu
 here=$(cd "$(dirname "$0")" && pwd)
 dir=${HELIX_DIR:-$(cd "$here/../../.." && pwd)/helix}
-rev=ba40e547426b0f9896c8bdc699a4ab11f2b37dbc
+rev=cee7102d9880d69f04ff01820917ba6cb252c7a4
 if [ ! -d "$dir/.git" ]; then
   git clone --filter=blob:none https://github.com/helix-editor/helix "$dir"
+fi
+if ! git -C "$dir" cat-file -e "$rev^{commit}" 2>/dev/null; then
+  git -C "$dir" fetch --quiet https://github.com/helix-editor/helix pull/16370/head
 fi
 git -C "$dir" checkout --quiet "$rev"
 cp "$here/oracle.rs" "$dir/helix-term/tests/oracle.rs"

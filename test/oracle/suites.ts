@@ -43,6 +43,7 @@ const EDITS = [
   "ix<C-w><esc>", "ifoo bar<C-w><esc>", "ifoo<C-u><esc>", "ifoo<C-k><esc>", "i<C-d><esc>", "i<del><esc>",
   "i<backspace><esc>", "a<backspace><esc>", "ifoo<backspace><backspace><esc>", "i<A-d><esc>", "i<A-backspace><esc>",
   "i(<esc>", "i[x<esc>", "i\"<esc>", "a(<esc>", "i()<esc>", "i(<backspace><esc>", "i{<ret><esc>",
+  "i(<space><esc>", "i{<space><esc>", "i[<space><esc>", "i\"<space><esc>", "i'<space><esc>", "i`<space><esc>",
   "i<ret><esc>", "a<ret><esc>", "i<tab><esc>", "i<S-tab><esc>", "i<C-j><esc>",
   "ifoo<esc>.", "afoo<esc>w.", "cbar<esc>w.", "ofoo<esc>.", "ifoo<esc>3.",
   "Qiab<esc>Qq", "Qwq", "QdQ2q", "\"aQihi<esc>Q\"aq",
@@ -97,6 +98,7 @@ const MD_KEYS = [
   "]f", "[f", "]t", "v]f", "vh[f", "]c", "mif", "mac",
   "i(<esc>", "i‘<esc>", "i“<esc>", "i«<esc>", "i`<esc>", "o‘<esc>", "A“<esc>", "i\"<esc>", "i(<backspace><esc>", "i“<backspace><esc>",
   "i<ret><esc>", "o<esc>", "w<gt>", "x<lt>",
+  "o- [<space><esc>", "i[<space><esc>", "i(<space><esc>", "i“<space><esc>",
 ];
 
 function graphemeStarts(text: string): number[] {

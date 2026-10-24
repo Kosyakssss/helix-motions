@@ -57,7 +57,7 @@ Settings that Helix can't decide live in the settings tab: auto-pairs from Helix
 
 ## Credits
 
-Ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742`, under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
+Ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742` with [PR #16370](https://github.com/helix-editor/helix/pull/16370) applied (auto-pairs add spaces only inside `()` and `{}`, so `- [ ]` stays a task), under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
 
 ## License
 

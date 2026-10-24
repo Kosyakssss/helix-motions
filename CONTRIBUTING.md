@@ -2,7 +2,7 @@
 
 ## Rule
 
-This is a port. Behaviour follows Helix at commit `ba40e54742`. If Helix does not have a command or an option, this plugin does not have it either. Where Obsidian needs a different answer (pickers, links, files), `docs/scope.md` says what and why.
+This is a port. Behaviour follows Helix at commit `ba40e54742` with PR #16370 applied (Helix commit `cee7102d98`). If Helix does not have a command or an option, this plugin does not have it either. Where Obsidian needs a different answer (pickers, links, files), `docs/scope.md` says what and why.
 
 ## Setup
 

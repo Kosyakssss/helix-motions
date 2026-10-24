@@ -19,8 +19,13 @@ export interface OracleResult {
   error?: string;
 }
 
-const CACHE = resolve(import.meta.dir, "cache.json");
 const HELIX = process.env.HELIX_DIR ?? resolve(import.meta.dir, "../../../helix");
+const CACHE = resolve(import.meta.dir, `cache-${helixRevision()}.json`);
+
+function helixRevision(): string {
+  const proc = Bun.spawnSync(["git", "rev-parse", "HEAD"], { cwd: existsSync(HELIX) ? HELIX : import.meta.dir, stdout: "pipe", stderr: "pipe" });
+  return existsSync(HELIX) && proc.exitCode === 0 ? proc.stdout.toString().trim() : "none";
+}
 
 function key(c: Case): string {
   return c.lang ? `${c.in}\u0000${c.keys}\u0000${c.lang}` : `${c.in}\u0000${c.keys}`;
