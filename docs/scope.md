@@ -31,7 +31,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `goto_line_start`, `goto_line_end`, `goto_line_end_newline`, `goto_first_nonwhitespace`, `goto_column` and `extend_*` twins | port | Line math. |
 | `goto_window_top`, `goto_window_center`, `goto_window_bottom` | adapt | Use the CM6 viewport and `scrolloff`. |
 | `goto_last_modification` | port | Track the last change position per document. |
-| `goto_word`, `extend_to_word` | port | Two-char labels as CM6 decorations. `jump-label-alphabet` applies. |
+| `goto_word`, `extend_to_word` | port | Two-char labels replace the first two characters of each word while you pick, as in Helix, in the note's own font. `jump-label-alphabet` applies. |
 | `goto_next_paragraph`, `goto_prev_paragraph` | port | `textobject.rs` paragraph logic. The example config binds `{` `}` to these. |
 
 ### Selection

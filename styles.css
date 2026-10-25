@@ -214,24 +214,9 @@ body.hx-autoinfo-ui .hx-autoinfo {
   color: var(--background-primary);
 }
 
-.hx .hx-jump-anchor {
-  position: relative;
-  display: inline-block;
-  width: 0;
-}
-
 .hx .hx-jump-label {
-  position: absolute;
-  left: 0;
-  top: 0;
-  z-index: 1;
   color: var(--text-error);
-  background-color: var(--background-primary);
   white-space: pre;
-}
-
-.hx .hx-jump-hidden {
-  color: transparent;
 }
 
 .hx-panel {

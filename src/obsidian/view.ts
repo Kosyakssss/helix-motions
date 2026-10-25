@@ -46,9 +46,7 @@ class LabelWidget extends WidgetType {
     return other.text === this.text;
   }
   toDOM(): HTMLElement {
-    const anchor = createSpan({ cls: "hx-jump-anchor", text: "\u200b" });
-    anchor.createSpan({ cls: "hx-jump-label", text: this.text });
-    return anchor;
+    return createSpan({ cls: "hx-jump-label", text: this.text });
   }
 }
 
@@ -98,8 +96,7 @@ function buildDecorations(view: EditorView, env: ViewEnv): DecorationSet {
     }
   }
   for (const group of groups) {
-    builder.push({ from: group.pos, to: group.pos, deco: Decoration.widget({ widget: new LabelWidget(group.text), side: -1 }) });
-    builder.push({ from: group.pos, to: group.end, deco: Decoration.mark({ class: "hx-jump-hidden" }) });
+    builder.push({ from: group.pos, to: group.end, deco: Decoration.replace({ widget: new LabelWidget(group.text) }) });
   }
   builder.sort((a, b) => a.from - b.from || a.deco.startSide - b.deco.startSide || a.to - b.to);
   const set = new RangeSetBuilder<Decoration>();
