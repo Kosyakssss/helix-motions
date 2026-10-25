@@ -11,7 +11,7 @@ The port follows Helix at commit `ba40e54742`, with [PR #16370](https://github.c
 
 ![Six cursors from one regex select, with the selection count in Helix's statusline](docs/screenshots/1-multiple-cursors.png)
 
-More in [docs/screenshots](docs/screenshots): the `Space` menu, a selection grown by the syntax tree, typed commands and jump labels.
+More in [docs/screenshots](docs/screenshots), each in dark, light and both: the `Space` menu, a selection grown by the syntax tree, typed commands and jump labels.
 
 ## Install
 
