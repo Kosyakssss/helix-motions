@@ -13,6 +13,7 @@ test/oracle/cache-*.json
 test-vault/scratch.md
 test-vault/*
 !test-vault/Welcome.md
+!test-vault/Demonstration.md
 !test-vault/helix.toml
 !test-vault/notes/
 test-vault/notes/*
