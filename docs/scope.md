@@ -32,7 +32,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `goto_window_top`, `goto_window_center`, `goto_window_bottom` | adapt | Use the CM6 viewport and `scrolloff`. |
 | `goto_last_modification` | port | Track the last change position per document. |
 | `goto_word`, `extend_to_word` | port | Two-char labels as CM6 decorations. `jump-label-alphabet` applies. |
-| `goto_next_paragraph`, `goto_prev_paragraph` | port | `textobject.rs` paragraph logic. Kote binds `{` `}` to these. |
+| `goto_next_paragraph`, `goto_prev_paragraph` | port | `textobject.rs` paragraph logic. The example config binds `{` `}` to these. |
 
 ### Selection
 
@@ -88,7 +88,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | --- | --- | --- |
 | `normal_mode`, `select_mode`, `exit_select_mode` | port | Core. |
 | `command_mode` | adapt | Our own `:` prompt with completion. |
-| `record_macro`, `replay_macro` | port | Key replay through our keymap engine. Also powers `@keys` in config (Kote uses `w = "@miw"`). |
+| `record_macro`, `replay_macro` | port | Key replay through our keymap engine. Also powers `@keys` in config (the example config uses `w = "@miw"`). |
 | `select_register` | port | Keep the real typed char. |
 | `copy_between_registers` | port | Registers. |
 
@@ -222,11 +222,11 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | `:buffer-close`, `:bc`, `:bclose` and `!` forms | adapt | Close the tab. |
 | `:buffer-close-others`, `:bco`, `:bcloseother` and `!` forms | adapt | Close other tabs. |
 | `:buffer-close-all`, `:bca`, `:bcloseall` and `!` forms | adapt | Close all tabs. |
-| `:buffer-next`, `:bn`, `:bnext`, `:buffer-previous`, `:bp`, `:bprev` | adapt | Next/previous tab. Kote binds Tab and S-Tab to these. |
+| `:buffer-next`, `:bn`, `:bnext`, `:buffer-previous`, `:bp`, `:bprev` | adapt | Next/previous tab. The example config binds Tab and S-Tab to these. |
 | `:write-buffer-close`, `:wbc` and `!` forms | adapt | Save and close. |
 | `:vsplit`, `:vs`, `:hsplit`, `:hs`, `:sp` | adapt | Split, optional path. |
 | `:vsplit-new`, `:vnew`, `:hsplit-new`, `:hnew` | adapt | Split with a new note. |
-| `:reload`, `:rl`, `:reload-all`, `:rla` | adapt | Re-read from disk. Kote binds `C-r` to `:reload`. |
+| `:reload`, `:rl`, `:reload-all`, `:rla` | adapt | Re-read from disk. The example config binds `C-r` to `:reload`. |
 | `:move`, `:mv` and `!` forms | adapt | `fileManager.renameFile`, updates links. |
 | `:read`, `:r` | adapt | Insert a vault file's text. |
 | `:goto`, `:g` | port | Line number. |
@@ -263,15 +263,15 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 
 ## Config (`helix.toml` in the vault root)
 
-Read with the same structure and defaults as Helix. Unknown or skipped keys log one warning and are ignored, so Kote's file loads without errors.
+Read with the same structure and defaults as Helix. Unknown or skipped keys log one warning and are ignored, so a full Helix config loads without errors.
 
 | Key | Mark | Reason |
 | --- | --- | --- |
 | `[keys.normal]`, `[keys.select]`, `[keys.insert]` | port | Full syntax: command names, `":typed args"`, arrays, `@keys` macros, nested tables. |
-| Insert-mode key chords (Kote's `j` then `k` to exit) | port | First key waits. On any other key, insert both. |
+| Insert-mode key chords (`j` then `k` to exit) | port | First key waits. On any other key, insert both. |
 | `scrolloff` | adapt | CM6 scroll margins. |
 | `scroll-lines` | adapt | `zj`/`zk` step only. Mouse wheel stays native. |
-| `default-yank-register`, `mouse-yank-register` | port | Kote sets both to `+`. |
+| `default-yank-register`, `mouse-yank-register` | port | The example config sets both to `+`. |
 | `jump-label-alphabet` | port | `gw`. |
 | `text-width` | port | `:reflow`. |
 | `search.smart-case`, `search.wrap-around` | port | Search. |
@@ -296,7 +296,7 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 | `file-picker.*`, `file-explorer.*`, `buffer-picker.*` | skip | Obsidian's switcher and explorer. |
 | `[theme]` | skip | Obsidian themes. |
 
-Kote's own config after stripping: everything except the `:sh ~/.config/helix/input-source ...` entries and the `space y` yazi binding is supported. The input-source script exists so Russian layout does not break normal mode. The layout rule (physical keys in normal and select mode) does that job here, so dropping it loses nothing.
+The example config in `test-vault/helix.toml` comes from a real Helix config. Only its shell commands were dropped: one switched the keyboard input source so a Russian layout did not break normal mode, and one opened a terminal file manager. The layout rule (physical keys in normal and select mode) does the first job here.
 
 ## Syntax tree
 

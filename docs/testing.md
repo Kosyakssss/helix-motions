@@ -15,7 +15,7 @@ Needs Obsidian running with the `test-vault` vault open. The tests drive Obsidia
 
 - `bun build.ts` builds into `test-vault/.obsidian/plugins/helix-motions/`; `bun build.ts --watch` rebuilds and reloads the plugin.
 - `bun test/e2e/differential.ts words,code,...`: the Helix cases again, typed as real keys in Obsidian, with the default config.
-- `bun test/e2e/scenarios.ts [name]`: Obsidian behaviour (Live Preview, Cmd shortcuts, Russian layout, lists, mouse, prompt, pickers, splits, scrolling, Kote's config).
+- `bun test/e2e/scenarios.ts [name]`: Obsidian behaviour (Live Preview, Cmd shortcuts, Russian layout, lists, mouse, prompt, pickers, splits, scrolling, the example config).
 - `bun test/e2e/visual.ts`: screenshots to `/tmp/hm-vis-*.png`.
 
 The tests use `scratch.md` and never touch another vault.

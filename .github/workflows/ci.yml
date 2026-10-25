@@ -36,4 +36,9 @@ jobs:
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0
         with:
           workspaces: ${{ runner.temp }}/helix
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9
+        with:
+          path: test/oracle/cache-*.json
+          key: oracle-${{ hashFiles('test/oracle/setup.sh', 'test/oracle/suites.ts', 'test/oracle/fuzz.ts') }}
+          restore-keys: oracle-
       - run: HELIX_DIR="$RUNNER_TEMP/helix" bun test

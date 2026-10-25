@@ -18,4 +18,6 @@ test-vault/*
 test-vault/notes/*
 !test-vault/notes/Second.md
 !test-vault/.obsidian/
+test-vault/.obsidian/plugins/
+test-vault/.obsidian/themes/
 dist

@@ -189,7 +189,7 @@ const checks: Check[] = [
     },
   },
   {
-    name: "Kote's config: jk leaves insert mode",
+    name: "Example config: jk leaves insert mode",
     run: () => {
       setDoc("#[x|]#\n");
       keys("iajk");
@@ -199,7 +199,7 @@ const checks: Check[] = [
     },
   },
   {
-    name: "Kote's config: j then other key inserts both",
+    name: "Example config: j then other key inserts both",
     run: () => {
       setDoc("#[x|]#\n");
       keys("ijo<esc>");
@@ -207,7 +207,7 @@ const checks: Check[] = [
     },
   },
   {
-    name: "Kote's config: w runs the @miw macro",
+    name: "Example config: w runs the @miw macro",
     run: () => {
       setDoc("hello wo#[r|]#ld again\n");
       keys("w");
