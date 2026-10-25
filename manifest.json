@@ -1,9 +1,9 @@
 {
   "id": "helix-motions",
   "name": "Helix Motions",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "minAppVersion": "1.13.0",
-  "description": "Edit notes with Helix keys, selections and multiple cursors, configured with your Helix config.",
+  "description": "A full, faithful port of Helix editing: its keymap, selections, multiple cursors, commands and config, tested against Helix itself.",
   "author": "Kote",
   "isDesktopOnly": true,
   "authorUrl": "https://github.com/Kosyakssss"
