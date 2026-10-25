@@ -169,5 +169,6 @@ export function state(): AppState {
 export function openScratch(): void {
   ob("dev:cdp", "method=Emulation.setFocusEmulationEnabled", 'params={"enabled":true}');
   ob("dev:cdp", "method=Page.setWebLifecycleState", 'params={"state":"active"}');
+  evalJs(`(async()=>{if(!app.vault.getAbstractFileByPath("scratch.md")) await app.vault.create("scratch.md",""); return 1})()`);
   ob("open", "path=scratch.md");
 }
