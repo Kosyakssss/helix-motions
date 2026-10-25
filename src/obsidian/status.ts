@@ -136,7 +136,7 @@ function inks(style: CSSStyleDeclaration): Record<string, string> {
 export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, view: MarkdownView | null): void {
   const sl = editor.config.statusline;
   const bar = el.parentElement;
-  const squared = el.querySelector(":scope > .hx-status-strip:not(.hx-hidden)") !== null;
+  const squared = el.hasClass("hx-status-joined") || el.querySelector(":scope > .hx-status-strip:not(.hx-hidden)") !== null;
   if (bar) {
     const style = getComputedStyle(bar);
     const full = bar.getBoundingClientRect().left < 1 || style.position === "static" || style.position === "relative";
