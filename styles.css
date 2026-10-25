@@ -240,7 +240,8 @@ body.hx-autoinfo-ui .hx-autoinfo {
   right: 12px;
   bottom: calc(100% + 8px + var(--hx-autoinfo-lift, 0px));
   padding: 6px 12px;
-  max-height: 60vh;
+  max-height: min(60vh, var(--hx-autoinfo-room, 60vh));
+  max-width: calc(100% - 24px);
   overflow: auto;
   background: var(--background-secondary);
   border: 1px solid var(--background-modifier-border);
@@ -502,7 +503,8 @@ body.hx-autoinfo-ui .hx-autoinfo {
 }
 
 .hx-config-editor .cm-editor {
-  max-height: 60vh;
+  height: 60vh;
+  border-radius: inherit;
 }
 
 .hx-config-editor .cm-scroller {
@@ -528,4 +530,9 @@ body.hx-autoinfo-ui .hx-autoinfo {
 .hx-config-editor .cm-panels {
   border: none;
   background: transparent;
+  color: var(--text-normal);
+}
+
+.hx-config-editor .hx-panel {
+  border-radius: 0 0 var(--radius-s) var(--radius-s);
 }

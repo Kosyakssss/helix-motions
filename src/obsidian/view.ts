@@ -375,7 +375,13 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
   const covered = statusRect && statusRect.height > 0 && statusRect.top < editorRect.bottom && statusRect.left < editorRect.right;
   const coverLeft = covered ? Math.min(statusRect.left, strip?.left ?? Infinity) : editorRect.right;
   dom.setCssProps({ "--hx-bar-overlap": `${Math.max(0, editorRect.right - coverLeft)}px` });
+  const opened = dom.hasClass("hx-panel-empty") && (!!active || !!status);
   dom.toggleClass("hx-panel-empty", !active && !status);
+  if (opened) {
+    window.requestAnimationFrame(() => {
+      if (view.dom.isConnected) view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: "nearest" }) });
+    });
+  }
   const statusEl = view.hasFocus ? statusBar?.querySelector<HTMLElement>(".hx-status") : null;
   if (statusEl) {
     statusEl.toggleClass("hx-status-joined", !!covered && (!!active || !!status));
@@ -415,7 +421,7 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
   }
   const panelRect = dom.getBoundingClientRect();
   const lift = statusRect && statusRect.height > 0 && statusRect.left < panelRect.right ? Math.max(0, panelRect.bottom - statusRect.top) : 0;
-  dom.setCssProps({ "--hx-autoinfo-lift": `${lift}px` });
+  dom.setCssProps({ "--hx-autoinfo-lift": `${lift}px`, "--hx-autoinfo-room": `${Math.max(0, panelRect.top - lift - editorRect.top - 16)}px` });
 }
 
 function describe(command: import("../keymap/trie").MappableCommand): string {
