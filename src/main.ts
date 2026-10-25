@@ -373,17 +373,26 @@ export default class HelixMotionsPlugin extends Plugin {
 
   async writeView(view: MarkdownView): Promise<void> {
     const config = this.helix.config;
-    const editor = view.editor;
-    let text = editor.getValue();
-    const original = text;
-    if (config.trimTrailingWhitespace) text = text.replace(/[ \t]+$/gm, "");
-    if (config.trimFinalNewlines) text = text.replace(/\n+$/, "\n");
-    if (config.insertFinalNewline && text.length > 0 && !text.endsWith("\n")) text += "\n";
-    if (text !== original) {
-      const cm = (editor as unknown as { cm: EditorView }).cm;
-      const host = this.hostForView(cm);
-      const from = 0;
-      host.dispatch({ changes: { from, to: original.length, insert: text } });
+    const cm = (view.editor as unknown as { cm: EditorView }).cm;
+    const host = this.hostForView(cm);
+    if (config.trimTrailingWhitespace) {
+      const doc = cm.state.doc;
+      const changes: { from: number; to: number }[] = [];
+      for (let i = 1; i <= doc.lines; i++) {
+        const line = doc.line(i);
+        const m = /\p{White_Space}+$/u.exec(line.text);
+        if (m) changes.push({ from: line.from + m.index, to: line.to });
+      }
+      if (changes.length > 0) host.dispatch({ changes });
+    }
+    if (config.trimFinalNewlines) {
+      const extra = (/\n+$/.exec(cm.state.doc.toString())?.[0].length ?? 0) - 1;
+      const end = cm.state.doc.length;
+      if (extra > 0) host.dispatch({ changes: { from: end - extra, to: end } });
+    }
+    const end = cm.state.doc.length;
+    if (config.insertFinalNewline && end > 0 && cm.state.doc.sliceString(end - 1) !== "\n") {
+      host.dispatch({ changes: { from: end, insert: "\n" } });
     }
     await view.save();
   }
