@@ -1,9 +1,9 @@
 # Helix Motions
 
-A full port of [Helix](https://helix-editor.com) editing to Obsidian. It is not a set of Helix-like keys on top of Obsidian. It is Helix's own behaviour, ported from Helix's source and checked against real Helix.
+A full port of [Helix](https://helix-editor.com) editing to Obsidian, made from Helix's source and checked against real Helix.
 
 - **Helix's editing commands.** The keymap, selections and multiple cursors, registers, macros, the undo tree, text objects, surround, jump labels, and the typed commands that make sense in a note. Only commands that need a shell or a language server are missing.
-- **Your Helix config.** `helix.toml` in the vault has the format of Helix's `config.toml`, so you can copy yours in. Keys the plugin can't use show a warning; they are not dropped silently.
+- **Your Helix config.** `helix.toml` in the vault has the format of Helix's `config.toml`, so you can copy yours in. Keys the plugin can't use show a warning.
 - **Helix's own engines.** Search runs Helix's regex crates, compiled to WebAssembly. Syntax-aware commands parse notes with the same tree-sitter markdown grammars as Helix. Grapheme clusters follow the same Unicode rules.
 - **Tested against Helix.** About 34,000 key sequences run in real Helix and in the plugin, and CI compares the text, the selections and the mode after each one. They must match exactly.
 
