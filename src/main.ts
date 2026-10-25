@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
+import { MarkdownView, Notice, type Editor, type EventRef, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { Extension, TransactionSpec } from "@codemirror/state";
 import { HelixEditor, Context } from "./core/editor";
@@ -180,6 +180,8 @@ export default class HelixMotionsPlugin extends Plugin {
         this.refreshStatus();
       }),
     );
+    const workspace = this.app.workspace as unknown as { on(name: "editor-selection-change", callback: (editor: Editor) => void): EventRef };
+    this.registerEvent(workspace.on("editor-selection-change", (editor) => this.countWholeFile(editor)));
     this.registerEvent(this.app.metadataCache.on("resolved", () => this.refreshStatus()));
     this.registerEvent(this.app.workspace.on("css-change", () => window.requestAnimationFrame(() => this.refreshStatus())));
     const onConfigFile = (file: { path: string }, oldPath?: string) => {
@@ -389,6 +391,13 @@ export default class HelixMotionsPlugin extends Plugin {
   suggestOpen(): boolean {
     const suggest = (this.app.workspace as unknown as { editorSuggest?: { currentSuggest?: unknown } }).editorSuggest;
     return !!suggest?.currentSuggest;
+  }
+
+  private countWholeFile(editor: Editor): void {
+    const mode = (editor as unknown as { cm?: EditorView }).cm?.state.field(helixField, false)?.mode;
+    if (!mode || mode === "select" || editor.getSelection() === "") return;
+    const plugins = (this.app as unknown as { internalPlugins?: { getEnabledPluginById(id: string): { onFileOpen?(): Promise<void> } | null } }).internalPlugins;
+    void plugins?.getEnabledPluginById("word-count")?.onFileOpen?.();
   }
 
   private uiSignature = "";
