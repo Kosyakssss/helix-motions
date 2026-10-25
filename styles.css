@@ -1,3 +1,119 @@
+/* @settings
+
+name: Helix Motions
+id: helix-motions
+settings:
+  -
+    id: hx-cursor-radius
+    title: Cursor corner radius
+    type: variable-number-slider
+    default: 2
+    min: 0
+    max: 6
+    step: 1
+    format: px
+  -
+    id: hx-status-heading
+    title: Status bar
+    type: heading
+    level: 2
+    collapsed: false
+  -
+    id: hx-full-status-bar
+    title: Full-width status bar
+    description: Stretch Obsidian's status bar across the window. Helix's left, center and right groups then sit at the left edge, in the middle and before Obsidian's items.
+    type: class-toggle
+  -
+    id: hx-status-look
+    title: Helix block
+    type: class-select
+    allowEmpty: false
+    default: hx-status-tone
+    options:
+      -
+        label: On a lighter tone
+        value: hx-status-tone
+      -
+        label: Split by a line
+        value: hx-status-line
+  -
+    id: hx-mode-look
+    title: Mode with color-modes on
+    type: class-select
+    allowEmpty: false
+    default: hx-mode-fill
+    options:
+      -
+        label: Filled block
+        value: hx-mode-fill
+      -
+        label: Colored text
+        value: hx-mode-text
+  -
+    id: hx-autoinfo-heading
+    title: Which-key box
+    type: heading
+    level: 2
+    collapsed: false
+  -
+    id: hx-autoinfo-side
+    title: Side
+    type: class-select
+    allowEmpty: false
+    default: hx-autoinfo-right
+    options:
+      -
+        label: Right, as in Helix
+        value: hx-autoinfo-right
+      -
+        label: Left
+        value: hx-autoinfo-left
+  -
+    id: hx-autoinfo-font
+    title: Font
+    type: class-select
+    allowEmpty: false
+    default: hx-autoinfo-mono
+    options:
+      -
+        label: Monospace
+        value: hx-autoinfo-mono
+      -
+        label: Interface
+        value: hx-autoinfo-ui
+
+*/
+
+body.hx-full-status-bar {
+  --status-bar-position: static;
+  --status-bar-radius: 0;
+  --status-bar-border-width: 1px 0 0 0;
+}
+
+body.hx-status-line .status-bar-item.hx-status:not(.hx-status-full) {
+  background-color: transparent;
+  border-right: 1px solid var(--text-faint);
+}
+
+body.hx-status-line .status-bar-item.hx-status.hx-status-full {
+  background-color: transparent;
+}
+
+body.hx-mode-text .hx-status-mode.hx-color.hx-status-mode {
+  background-color: transparent;
+  color: var(--hx-mode-color);
+  font-weight: var(--font-bold);
+}
+
+body.hx-autoinfo-left .hx-autoinfo {
+  right: auto;
+  left: 12px;
+}
+
+body.hx-autoinfo-ui .hx-autoinfo {
+  font-family: var(--font-interface);
+}
+
 .hx.hx-normal .cm-content,
 .hx.hx-select .cm-content {
   caret-color: transparent;
@@ -29,32 +145,46 @@
   top: var(--hx-cell-top);
   width: var(--hx-cell-width);
   height: var(--hx-cell-height);
-  border-radius: 3px;
+  border-radius: var(--hx-cursor-radius, 2px);
   pointer-events: none;
 }
 
-.cm-layer .hx-cell-sq-tl {
-  border-top-left-radius: 0;
-}
-
-.cm-layer .hx-cell-sq-tr {
-  border-top-right-radius: 0;
-}
-
-.cm-layer .hx-cell-sq-bl {
-  border-bottom-left-radius: 0;
-}
-
-.cm-layer .hx-cell-sq-br {
-  border-bottom-right-radius: 0;
-}
-
 .cm-layer .hx-cell-block {
+  border-radius: 0;
+  background-color: var(--hx-cell-backdrop);
+  background-image: var(--hx-cell-backdrop-image);
+}
+
+.cm-layer .hx-cell-block::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: var(--hx-cursor-radius, 2px);
   background-color: color-mix(in srgb, var(--text-normal) 45%, var(--background-primary));
 }
 
-.cm-layer .hx-cell-block.hx-cell-primary {
+.cm-layer .hx-cell-block.hx-cell-primary::before {
   background-color: var(--text-normal);
+}
+
+.cm-layer .hx-cell-sq-tl,
+.cm-layer .hx-cell-sq-tl::before {
+  border-top-left-radius: 0;
+}
+
+.cm-layer .hx-cell-sq-tr,
+.cm-layer .hx-cell-sq-tr::before {
+  border-top-right-radius: 0;
+}
+
+.cm-layer .hx-cell-sq-bl,
+.cm-layer .hx-cell-sq-bl::before {
+  border-bottom-left-radius: 0;
+}
+
+.cm-layer .hx-cell-sq-br,
+.cm-layer .hx-cell-sq-br::before {
+  border-bottom-right-radius: 0;
 }
 
 .cm-layer .hx-cell-underline {
@@ -205,9 +335,39 @@
     calc(-1 * var(--hx-bar-pad-left, 0px));
   padding: 0;
   background-color: var(--background-modifier-hover);
-  border-top-left-radius: var(--hx-inner-radius);
+  border-radius: var(--hx-inner-radius) 0 0 0;
   font-family: var(--font-monospace);
   white-space: pre;
+}
+
+.status-bar-item.hx-status.hx-status-full {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+}
+
+.hx-status-full > .hx-status-group:empty {
+  display: flex;
+}
+
+.hx-status-full > .hx-status-left {
+  justify-self: start;
+}
+
+.hx-status-full > .hx-status-right {
+  justify-self: end;
+}
+
+.hx-status-full > .hx-status-group:not(:empty) ~ .hx-status-group:not(:empty) {
+  border-left: none;
+}
+
+.hx-status-full .hx-status-strip {
+  position: static;
+  padding: 0;
+  background-color: transparent;
+  border: none;
+  border-radius: 0;
 }
 
 .hx-status-group {
@@ -256,16 +416,19 @@
 }
 
 .hx-status-mode.hx-color.hx-status-normal {
+  --hx-mode-color: var(--hx-mode-normal);
   background-color: var(--hx-mode-normal);
   color: var(--hx-ink-normal);
 }
 
 .hx-status-mode.hx-color.hx-status-insert {
+  --hx-mode-color: var(--hx-mode-insert);
   background-color: var(--hx-mode-insert);
   color: var(--hx-ink-insert);
 }
 
 .hx-status-mode.hx-color.hx-status-select {
+  --hx-mode-color: var(--hx-mode-select);
   background-color: var(--hx-mode-select);
   color: var(--hx-ink-select);
 }
@@ -298,13 +461,6 @@
   border-top-left-radius: var(--hx-bar-radius, 0px);
 }
 
-.hx-status-full > .hx-status-strip {
-  top: 0;
-  background-color: transparent;
-  border: none;
-  border-radius: 0;
-}
-
 .hx-status-strip.hx-hidden {
   display: none;
 }
@@ -314,7 +470,7 @@
 }
 
 .hx-status:has(> .hx-status-strip:not(.hx-hidden)) {
-  border-top-left-radius: 0;
+  border-radius: 0;
 }
 
 .hx-status-macro {
@@ -348,6 +504,10 @@
   background: var(--background-primary);
   font-family: var(--font-monospace);
   font-size: var(--font-ui-small);
+}
+
+.hx-config-editor .cm-content {
+  caret-color: var(--caret-color, var(--text-normal));
 }
 
 .hx-config-editor .cm-editor {

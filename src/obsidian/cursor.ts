@@ -22,6 +22,11 @@ interface Glyph {
   variations: string;
 }
 
+interface Backdrop {
+  color: string;
+  image: string;
+}
+
 interface Cell {
   pos: number;
   end: number;
@@ -34,10 +39,12 @@ class CellMarker implements LayerMarker {
     readonly cls: string,
     readonly box: Box,
     readonly glyph: Glyph | null,
+    readonly backdrop: Backdrop | null,
   ) {}
 
   eq(other: LayerMarker): boolean {
     if (!(other instanceof CellMarker) || other.cls !== this.cls) return false;
+    if (this.backdrop?.color !== other.backdrop?.color || this.backdrop?.image !== other.backdrop?.image) return false;
     const a = this.box;
     const b = other.box;
     if (a.left !== b.left || a.top !== b.top || a.right !== b.right || a.bottom !== b.bottom) return false;
@@ -74,6 +81,8 @@ class CellMarker implements LayerMarker {
       "--hx-cell-top": `${this.box.top}px`,
       "--hx-cell-width": `${this.box.right - this.box.left}px`,
       "--hx-cell-height": `${this.box.bottom - this.box.top}px`,
+      "--hx-cell-backdrop": this.backdrop?.color ?? "transparent",
+      "--hx-cell-backdrop-image": this.backdrop?.image ?? "none",
     });
     el.empty();
     const g = this.glyph;
@@ -94,6 +103,7 @@ class Measure {
   private rows = new Map<Element, { top: number; height: number }>();
   private opaque = new Map<Element, boolean>();
   private lineBoxes = new Map<number, Box[]>();
+  private backdrops = new Map<Element, Backdrop>();
 
   constructor(
     readonly view: EditorView,
@@ -121,6 +131,27 @@ class Measure {
     }
     const k = Math.max(0, Math.floor((y - metrics.top) / metrics.height));
     return [metrics.top + k * metrics.height, metrics.top + (k + 1) * metrics.height];
+  }
+
+  backdrop(pos: number): Backdrop | null {
+    const { node } = this.view.domAtPos(pos, 1);
+    const start = node.nodeType === 1 ? (node as Element) : node.parentElement;
+    if (!start) return null;
+    const known = this.backdrops.get(start);
+    if (known) return known;
+    const layers: string[] = [];
+    let color = "transparent";
+    for (let e: Element | null = start; e; e = e.parentElement) {
+      const bg = getComputedStyle(e).backgroundColor;
+      if (isOpaque(bg)) {
+        color = bg;
+        break;
+      }
+      if (!/^(transparent|rgba\(0, 0, 0, 0\))$/.test(bg)) layers.push(`linear-gradient(${bg}, ${bg})`);
+    }
+    const result = { color, image: layers.length > 0 ? layers.join(", ") : "none" };
+    this.backdrops.set(start, result);
+    return result;
   }
 
   onOpaque(el: Element | null): boolean {
@@ -374,7 +405,7 @@ function selectionMarkers(view: EditorView, editor: HelixEditor): LayerMarker[] 
       for (const rect of Array.from(r.getClientRects())) {
         const row = measure.row(el, (rect.top + rect.bottom) / 2);
         if (row && rect.width > 0) {
-          out.push(new CellMarker("hx-cell hx-cell-sel", base(view, { left: rect.left, right: rect.right, top: row[0], bottom: row[1] }), null));
+          out.push(new CellMarker("hx-cell hx-cell-sel", base(view, { left: rect.left, right: rect.right, top: row[0], bottom: row[1] }), null, null));
         }
       }
     }
@@ -382,7 +413,7 @@ function selectionMarkers(view: EditorView, editor: HelixEditor): LayerMarker[] 
       const c = view.coordsAtPos(line.to, -1) ?? view.coordsAtPos(line.to, 1);
       const row = c && measure.row(el, (c.top + c.bottom) / 2);
       if (c && row) {
-        out.push(new CellMarker("hx-cell hx-cell-sel", base(view, { left: c.right, right: c.right + spaceWidth(el), top: row[0], bottom: row[1] }), null));
+        out.push(new CellMarker("hx-cell hx-cell-sel", base(view, { left: c.right, right: c.right + spaceWidth(el), top: row[0], bottom: row[1] }), null, null));
       }
     }
   }
@@ -431,7 +462,8 @@ function cellMarkers(view: EditorView, editor: HelixEditor): LayerMarker[] {
     const shape = insertPrimary ? m.shape : "block";
     const cls = ["hx-cell", `hx-cell-${shape}`, cell.primary ? "hx-cell-primary" : "", ...corners].filter(Boolean).join(" ");
     const glyph = shape === "block" && !cell.eol ? glyphAt(view, cell, row[0], coords) : null;
-    out.push(new CellMarker(cls, base(view, box), glyph));
+    const backdrop = shape === "block" ? measure.backdrop(cell.pos) : null;
+    out.push(new CellMarker(cls, base(view, box), glyph, backdrop));
   }
   return out;
 }

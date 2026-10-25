@@ -148,6 +148,17 @@ export default class HelixMotionsPlugin extends Plugin {
     this.registerEditorExtension(this.editorExtension);
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass("hx-status");
+    const bar = this.statusEl.parentElement;
+    if (bar) {
+      let width = bar.offsetWidth;
+      const observer = new ResizeObserver(() => {
+        if (Math.abs(bar.offsetWidth - width) < 1) return;
+        width = bar.offsetWidth;
+        this.refreshStatus();
+      });
+      observer.observe(bar);
+      this.register(() => observer.disconnect());
+    }
     this.settingTab = new HelixSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
     this.addCommand({ id: "reload-config", name: "Reload helix.toml", callback: () => void this.reloadConfig() });
@@ -170,6 +181,7 @@ export default class HelixMotionsPlugin extends Plugin {
       }),
     );
     this.registerEvent(this.app.metadataCache.on("resolved", () => this.refreshStatus()));
+    this.registerEvent(this.app.workspace.on("css-change", () => window.requestAnimationFrame(() => this.refreshStatus())));
     const onConfigFile = (file: { path: string }, oldPath?: string) => {
       if (file.path === this.configPath() || oldPath === this.configPath()) void this.reloadConfig();
     };
@@ -282,6 +294,10 @@ export default class HelixMotionsPlugin extends Plugin {
   setConfigView(view: EditorView | null): void {
     this.configView = view;
     if (view) this.syntaxSessions?.close(view);
+  }
+
+  escapeConfig(view: EditorView): void {
+    this.helix.feedKeys(this.hostForView(view), "<esc>");
   }
 
   isConfigView(view: EditorView | null): boolean {

@@ -136,18 +136,19 @@ function inks(style: CSSStyleDeclaration): Record<string, string> {
 export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, view: MarkdownView | null): void {
   const sl = editor.config.statusline;
   const bar = el.parentElement;
+  const squared = el.querySelector(":scope > .hx-status-strip:not(.hx-hidden)") !== null;
   if (bar) {
     const style = getComputedStyle(bar);
-    const rect = bar.getBoundingClientRect();
-    el.toggleClass("hx-status-full", rect.left < 1);
+    const full = bar.getBoundingClientRect().left < 1 || style.position === "static" || style.position === "relative";
+    el.toggleClass("hx-status-full", full);
     el.setCssProps({
       "--hx-bar-pad-top": style.paddingTop,
       "--hx-bar-pad-bottom": style.paddingBottom,
       "--hx-bar-pad-left": style.paddingLeft,
-      "--hx-bar-radius": style.borderTopLeftRadius,
       "--hx-bar-border-width": style.borderTopWidth,
       "--hx-bar-border-left": style.borderLeftWidth,
       "--hx-bar-border-color": style.borderTopColor,
+      ...(squared && !full ? {} : { "--hx-bar-radius": style.borderTopLeftRadius }),
       ...inks(getComputedStyle(el)),
     });
   }
@@ -157,8 +158,10 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
   if (pending) strip.createSpan({ text: pending, cls: "hx-status-pending" });
   if (editor.macroRecording) strip.createSpan({ text: `[${editor.macroRecording.register}]`, cls: "hx-status-macro" });
   strip.toggleClass("hx-hidden", strip.childElementCount === 0);
-  for (const group of [sl.left, sl.center, sl.right]) {
-    const box = el.createSpan({ cls: "hx-status-group" });
+  const groups: [string, string[]][] = [["left", sl.left], ["center", sl.center], ["right", sl.right]];
+  for (const [side, group] of groups) {
+    const box = el.createSpan({ cls: `hx-status-group hx-status-${side}` });
+    if (side === "right" && el.hasClass("hx-status-full") && !strip.hasClass("hx-hidden")) box.appendChild(strip);
     for (const name of group) {
       if (name === "spacer") {
         box.createSpan({ cls: "hx-status-item" });

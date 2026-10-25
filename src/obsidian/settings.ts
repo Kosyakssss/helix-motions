@@ -1,4 +1,4 @@
-import { PluginSettingTab, type App, type Plugin, type Setting, type SettingDefinitionItem } from "obsidian";
+import { PluginSettingTab, Scope, type App, type Plugin, type Setting, type SettingDefinitionItem } from "obsidian";
 import { EditorState, type Extension } from "@codemirror/state";
 import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap } from "@codemirror/commands";
@@ -20,6 +20,7 @@ export interface SettingsHost extends Plugin {
   saveConfigSource(text: string): Promise<void>;
   saveSettings(): Promise<void>;
   setConfigView(view: EditorView | null): void;
+  escapeConfig(view: EditorView): void;
 }
 
 export class HelixSettingTab extends PluginSettingTab {
@@ -101,9 +102,13 @@ export class HelixSettingTab extends PluginSettingTab {
         extensions: [this.host.editorExtension, EditorView.lineWrapping, keymap.of([{ key: "Mod-s", run: save }, ...defaultKeymap])],
       }),
     });
-    view.contentDOM.addEventListener("keydown", (event) => {
-      if (event.key === "Escape") view.focus();
+    const scope = new Scope(this.app.scope);
+    scope.register([], "Escape", () => {
+      this.host.escapeConfig(view);
+      return false;
     });
+    view.contentDOM.addEventListener("focus", () => this.app.keymap.pushScope(scope));
+    view.contentDOM.addEventListener("blur", () => this.app.keymap.popScope(scope));
     setting.addButton((b) =>
       b.setButtonText("Revert").onClick(() => {
         view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: saved } });
@@ -117,6 +122,7 @@ export class HelixSettingTab extends PluginSettingTab {
     this.host.setConfigView(view);
     this.showWarnings();
     return () => {
+      this.app.keymap.popScope(scope);
       this.host.setConfigView(null);
       this.warningsEl = null;
       view.destroy();

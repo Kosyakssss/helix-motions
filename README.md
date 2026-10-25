@@ -23,6 +23,8 @@ What works:
 
 Not available: shell commands (`:sh`, `|`, `!`), LSP and debugging. They show a message instead.
 
+The look follows your theme. With the [Style Settings](https://github.com/mgmeyers/obsidian-style-settings) plugin you can also set the cursor's corner radius, a full-width status bar, how the Helix block and the mode look in the status bar, and the side and font of the which-key box.
+
 ## Syntax tree
 
 `Alt-o`, `Alt-i`, `Alt-n`, `Alt-p`, `Alt-a`, `Alt-I`, `Alt-e`, `Alt-b`, `mm`, `mim` and auto-pairs use a syntax tree of the note, as in Helix. The plugin parses notes with the same markdown grammars as Helix (`tree-sitter-markdown` and `tree-sitter-markdown-inline`), run by the tree-sitter C library at Helix's version, compiled to WebAssembly. Code inside fences, HTML, YAML front matter and math have no tree of their own; Helix has grammars for those.
