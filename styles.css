@@ -335,7 +335,8 @@ body.hx-autoinfo-ui .hx-autoinfo {
     calc(-1 * var(--hx-bar-pad-left, 0px));
   padding: 0;
   background-color: var(--background-modifier-hover);
-  border-radius: var(--hx-inner-radius) 0 0 0;
+  border-radius: 0;
+  border-top-left-radius: var(--hx-inner-radius);
   font-family: var(--font-monospace);
   white-space: pre;
 }
@@ -470,7 +471,19 @@ body.hx-autoinfo-ui .hx-autoinfo {
 }
 
 .hx-status:has(> .hx-status-strip:not(.hx-hidden)) {
-  border-radius: 0;
+  border-top-left-radius: 0;
+}
+
+.status-bar:has(> .hx-status.hx-status-joined),
+.hx-status.hx-status-joined,
+.hx-status-joined > .hx-status-strip,
+.hx-status-joined > .hx-status-group > .hx-status-item > .hx-status-mode.hx-color {
+  border-top-left-radius: 0;
+}
+
+.status-bar:has(> .hx-status.hx-status-joined),
+.hx-status-joined > .hx-status-strip {
+  border-left-color: transparent;
 }
 
 .hx-status-macro {

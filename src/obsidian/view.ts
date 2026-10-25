@@ -377,6 +377,7 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
   const covered = statusRect && statusRect.height > 0 && statusRect.top < editorRect.bottom && statusRect.left < editorRect.right;
   const coverLeft = covered ? Math.min(statusRect.left, strip?.left ?? Infinity) : editorRect.right;
   dom.setCssProps({ "--hx-bar-overlap": `${Math.max(0, editorRect.right - coverLeft)}px` });
+  if (view.hasFocus) statusBar?.querySelector(".hx-status")?.toggleClass("hx-status-joined", !!covered && (!!active || !!status));
   info.empty();
   const auto = editor.config.autoInfo && view.hasFocus ? editor.autoinfo : null;
   info.toggleClass("hx-hidden", !auto);
