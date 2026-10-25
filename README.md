@@ -9,6 +9,10 @@ A full port of [Helix](https://helix-editor.com) editing to Obsidian. It is not 
 
 The port follows Helix at commit `ba40e54742`, with [PR #16370](https://github.com/helix-editor/helix/pull/16370) applied.
 
+![Six cursors from one regex select, with the selection count in Helix's statusline](docs/screenshots/1-multiple-cursors.png)
+
+More in [docs/screenshots](docs/screenshots): the `Space` menu, a selection grown by the syntax tree, typed commands and jump labels.
+
 ## Install
 
 1. Turn off **Settings → Editor → Vim key bindings**. Turn off other Vim plugins.
