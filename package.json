@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "bun build.ts",
-    "dev": "bun build.ts --watch",
+    "build": "bun build.ts --out test-vault/.obsidian/plugins/helix-motions",
+    "dev": "bun build.ts --out test-vault/.obsidian/plugins/helix-motions --watch",
     "check": "tsc --noEmit -p .",
     "test": "bun test",
     "diff": "bun test/oracle/diff.ts",
@@ -24,5 +24,8 @@
     "smol-toml": "^1.9.1",
     "typescript": "^7",
     "typescript-eslint": "^8.72.0"
+  },
+  "overrides": {
+    "moment": "2.31.0"
   }
 }

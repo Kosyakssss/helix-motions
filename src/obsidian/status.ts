@@ -158,6 +158,7 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
   if (pending) strip.createSpan({ text: pending, cls: "hx-status-pending" });
   if (editor.macroRecording) strip.createSpan({ text: `[${editor.macroRecording.register}]`, cls: "hx-status-macro" });
   strip.toggleClass("hx-hidden", strip.childElementCount === 0);
+  el.toggleClass("hx-status-strip-shown", !strip.hasClass("hx-hidden") && !el.hasClass("hx-status-full"));
   const groups: [string, string[]][] = [["left", sl.left], ["center", sl.center], ["right", sl.right]];
   for (const [side, group] of groups) {
     const box = el.createSpan({ cls: `hx-status-group hx-status-${side}` });
@@ -172,5 +173,21 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
       const item = box.createSpan({ cls: "hx-status-item" });
       for (const part of parts) item.createSpan({ text: part.text, cls: part.cls });
     }
+    const block = (item: Element | null) => item?.querySelector(":scope > .hx-status-mode.hx-color") != null;
+    box.toggleClass("hx-status-mode-first", block(box.firstElementChild));
+    box.toggleClass("hx-status-mode-last", block(box.lastElementChild));
   }
+  syncBar(el);
+}
+
+export function syncBar(el: HTMLElement): void {
+  const bar = el.parentElement;
+  if (!bar) return;
+  const joined = el.hasClass("hx-status-joined");
+  bar.toggleClass("hx-bar-square", joined || el.hasClass("hx-status-strip-shown"));
+  bar.toggleClass("hx-bar-joined", joined);
+}
+
+export function releaseBar(el: HTMLElement): void {
+  el.parentElement?.removeClasses(["hx-bar-square", "hx-bar-joined"]);
 }

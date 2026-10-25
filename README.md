@@ -47,8 +47,9 @@ Settings that Helix can't decide live in the settings tab: auto-pairs from Helix
 
 ## Capabilities
 
-- **Clipboard:** the `+` register reads and writes the system clipboard. To keep Helix's commands synchronous, the plugin reads the clipboard when Obsidian gets focus and after a copy or cut.
+- **Clipboard:** only the `+` and `*` registers read and write the system clipboard, as in Helix. `default-yank-register` decides whether plain `y` and `p` use it. To keep Helix's commands synchronous, the plugin reads the clipboard when Obsidian gets focus and after a copy or cut.
 - **Files:** reads and writes `helix.toml` in the vault. `:w`, `:o`, `:move` and similar commands work on notes, as in Helix.
+- **File list:** lists the vault's file paths, only when you open a picker or complete a path: the file picker in the current folder, headings in the vault (`Space S`), and paths for `:o` and similar commands. Unresolved links come from Obsidian's link index. Nothing leaves the vault.
 - **Obsidian settings:** changes "Show line number" and "Show indentation guides" only when `helix.toml` sets `line-number`, `gutters` or `indent-guides`.
 - **Network:** none.
 - **WebAssembly:** `main.js` contains two compressed WebAssembly files, both built from pinned sources and checked byte for byte in CI:

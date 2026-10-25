@@ -11,7 +11,7 @@ import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
 import { makeViewOps } from "./obsidian/viewops";
-import { renderStatus } from "./obsidian/status";
+import { releaseBar, renderStatus } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
 import { loadRegex, loadSyntax } from "./obsidian/syntax";
 import { setRegexEngine } from "./core/regex";
@@ -261,6 +261,7 @@ export default class HelixMotionsPlugin extends Plugin {
   };
 
   override onunload(): void {
+    if (this.statusEl) releaseBar(this.statusEl);
     this.statusEl?.remove();
     this.syntaxSessions?.clear();
   }

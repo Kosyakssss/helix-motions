@@ -15,6 +15,7 @@ import { keyFromDom } from "../keys";
 import { search, type TrieNode } from "../keymap/trie";
 import { nextGraphemeBoundary } from "../graphemes";
 import { cursorLayers } from "./cursor";
+import { syncBar } from "./status";
 import { helixField, helixOwned, historyField, setHelix, syncNativeSelection, toNative } from "../state";
 import { hookInsert } from "../auto-pairs";
 import { autoPairsFor, insertDiffers, mayAutoPair } from "../commands/insert";
@@ -377,7 +378,12 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
   const covered = statusRect && statusRect.height > 0 && statusRect.top < editorRect.bottom && statusRect.left < editorRect.right;
   const coverLeft = covered ? Math.min(statusRect.left, strip?.left ?? Infinity) : editorRect.right;
   dom.setCssProps({ "--hx-bar-overlap": `${Math.max(0, editorRect.right - coverLeft)}px` });
-  if (view.hasFocus) statusBar?.querySelector(".hx-status")?.toggleClass("hx-status-joined", !!covered && (!!active || !!status));
+  dom.toggleClass("hx-panel-empty", !active && !status);
+  const statusEl = view.hasFocus ? statusBar?.querySelector<HTMLElement>(".hx-status") : null;
+  if (statusEl) {
+    statusEl.toggleClass("hx-status-joined", !!covered && (!!active || !!status));
+    syncBar(statusEl);
+  }
   info.empty();
   const auto = editor.config.autoInfo && view.hasFocus ? editor.autoinfo : null;
   info.toggleClass("hx-hidden", !auto);

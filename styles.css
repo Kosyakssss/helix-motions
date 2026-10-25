@@ -242,7 +242,7 @@ body.hx-autoinfo-ui .hx-autoinfo {
   border-top: 1px solid var(--background-modifier-border);
 }
 
-.hx-panel:has(> .hx-prompt.hx-hidden):has(> .hx-message.hx-hidden) {
+.hx-panel.hx-panel-empty {
   border-top: none;
 }
 
@@ -387,11 +387,11 @@ body.hx-autoinfo-ui .hx-autoinfo {
   border-left: 1px solid var(--text-faint);
 }
 
-.hx-status-group:has(> .hx-status-item:first-child > .hx-status-mode.hx-color) {
+.hx-status-group.hx-status-mode-first {
   padding-left: 0;
 }
 
-.hx-status-group:has(> .hx-status-item:last-child > .hx-status-mode.hx-color) {
+.hx-status-group.hx-status-mode-last {
   padding-right: 0;
 }
 
@@ -466,22 +466,15 @@ body.hx-autoinfo-ui .hx-autoinfo {
   display: none;
 }
 
-.status-bar:has(> .hx-status:not(.hx-status-full) > .hx-status-strip:not(.hx-hidden)) {
-  border-top-left-radius: 0;
-}
-
-.hx-status:has(> .hx-status-strip:not(.hx-hidden)) {
-  border-top-left-radius: 0;
-}
-
-.status-bar:has(> .hx-status.hx-status-joined),
+.status-bar.hx-bar-square,
+.hx-status.hx-status-strip-shown,
 .hx-status.hx-status-joined,
 .hx-status-joined > .hx-status-strip,
 .hx-status-joined > .hx-status-group > .hx-status-item > .hx-status-mode.hx-color {
   border-top-left-radius: 0;
 }
 
-.status-bar:has(> .hx-status.hx-status-joined),
+.status-bar.hx-bar-joined,
 .hx-status-joined > .hx-status-strip {
   border-left-color: transparent;
 }
