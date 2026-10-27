@@ -1,4 +1,5 @@
-import type { Text } from "@codemirror/state";
+import type { Text, TransactionSpec } from "@codemirror/state";
+import type { EditorView } from "@codemirror/view";
 import type { Context } from "../core/editor";
 import {
   nextGraphemeBoundary,
@@ -11,6 +12,7 @@ import {
   movePrevParagraph,
   moveVertically,
   moveVisualVertically,
+  aimAtWidget,
   restoreVisualRows,
   visualRowOffset,
   wordMove,
@@ -55,17 +57,26 @@ function logical(cx: Context) {
 function moveVisual(cx: Context, dir: Direction, behaviour: Movement): void {
   const view = cx.host.view;
   if (!view || !cx.editor.visualLines) return moveImpl(cx, logical(cx), dir, behaviour);
+  const count = cx.count();
+  moveVisualSelection(cx, view, behaviour, (r) => moveVisualVertically(view, r, dir, count, behaviour));
+}
+
+export function moveVisualSelection(
+  cx: Context,
+  view: EditorView,
+  behaviour: Movement,
+  move: (range: Range) => Range,
+  extra: TransactionSpec = {},
+): void {
+  const doc = docOf(cx);
   const offsets: (number | null)[] = [];
-  moveImpl(
-    cx,
-    (doc, range, d, count, b) => {
-      const moved = moveVisualVertically(view, range, d, count, b);
-      offsets.push(visualRowOffset(view, moved.cursor(doc)));
-      return moved;
-    },
-    dir,
-    behaviour,
-  );
+  const next = selOf(cx).transform((r) => {
+    const target = move(r);
+    const moved = target === r ? r : aimAtWidget(view, target, behaviour);
+    offsets.push(visualRowOffset(view, moved.cursor(doc)));
+    return moved;
+  });
+  setSel(cx, next, extra);
   const sel = selOf(cx);
   if (sel.ranges.length !== offsets.length) return;
   restoreVisualRows(view, sel.ranges, offsets, behaviour, (fixed) => {

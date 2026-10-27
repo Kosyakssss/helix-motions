@@ -4,6 +4,7 @@ import type { Host } from "../core/host";
 import { moveVisualVertically } from "../movement";
 import { Range, Selection } from "../selection";
 import { modeOf, selOf, setSel } from "../commands/util";
+import { moveVisualSelection } from "../commands/motion";
 
 function rows(view: EditorView, amount: number | "page" | "half"): number {
   const lh = view.defaultLineHeight;
@@ -31,11 +32,9 @@ export function makeViewOps(scrolloff: () => number): ViewOps {
       const doc = view.state.doc;
       const extend = modeOf(cx) === "select";
       if (sync) {
-        setSel(
-          cx,
-          selOf(cx).transform((r) => moveVisualVertically(view, r, dir, n, extend ? "extend" : "move")),
-          { scrollIntoView: false },
-        );
+        moveVisualSelection(cx, view, extend ? "extend" : "move", (r) => moveVisualVertically(view, r, dir, n, extend ? "extend" : "move"), {
+          scrollIntoView: false,
+        });
         return;
       }
       const rect = view.scrollDOM.getBoundingClientRect();

@@ -150,6 +150,43 @@ export function moveVisualVertically(
   return range.putCursor(doc, pos, behaviour === "extend").withGoal(goal);
 }
 
+export function aimAtWidget(view: EditorView, range: Range, behaviour: Movement): Range {
+  const goal = range.goalColumn;
+  const doc = view.state.doc;
+  const pos = range.cursor(doc);
+  const coords = view.coordsAtPos(pos, 1);
+  if (goal === undefined || !coords) return skipHidden(view, range, behaviour);
+  const x = view.contentDOM.getBoundingClientRect().left + goal;
+  const hit = view.dom.ownerDocument.elementFromPoint(x, (coords.top + coords.bottom) / 2);
+  const line = hit?.closest(".cm-line");
+  let widget = hit?.closest('[contenteditable="false"]');
+  if (!line || !widget || !line.contains(widget) || !view.contentDOM.contains(line)) return skipHidden(view, range, behaviour);
+  while (widget.parentElement && widget.parentElement !== line && widget.parentElement.closest('[contenteditable="false"]')) {
+    widget = widget.parentElement.closest('[contenteditable="false"]')!;
+  }
+  const parent = widget.parentNode!;
+  const index = Array.prototype.indexOf.call(parent.childNodes, widget);
+  const start = view.posAtDOM(parent, index);
+  const end = view.posAtDOM(parent, index + 1);
+  if (end <= start || start === pos || doc.lineAt(start).number !== doc.lineAt(pos).number) return range;
+  return range.putCursor(doc, start, behaviour === "extend").withGoal(goal);
+}
+
+function skipHidden(view: EditorView, range: Range, behaviour: Movement): Range {
+  const doc = view.state.doc;
+  const start = range.cursor(doc);
+  const end = doc.lineAt(start).to;
+  let pos = start;
+  while (pos < end) {
+    const a = view.coordsAtPos(pos, 1);
+    const b = view.coordsAtPos(pos + 1, -1);
+    if (!a || !b || Math.abs(b.left - a.left) >= 0.5 || Math.abs(b.top - a.top) >= 1) break;
+    pos++;
+  }
+  if (pos === start || pos === end) return range;
+  return range.putCursor(doc, pos, behaviour === "extend").withGoal(range.goalColumn);
+}
+
 export function visualRowOffset(view: EditorView, pos: number): number | null {
   const coords = view.coordsAtPos(pos, 1);
   return coords ? coords.top - view.documentTop - view.lineBlockAt(pos).top : null;
@@ -174,7 +211,8 @@ function restoreVisualRow(view: EditorView, range: Range, offset: number | null,
   const doc = view.state.doc;
   const pos = range.cursor(doc);
   const now = visualRowOffset(view, pos);
-  if (offset === null || now === null || Math.abs(now - offset) < 1) return range;
+  const coords = view.coordsAtPos(pos, 1);
+  if (offset === null || now === null || !coords || Math.abs(now - offset) < (coords.bottom - coords.top) / 2) return range;
   const block = view.lineBlockAt(pos);
   const left = view.contentDOM.getBoundingClientRect().left;
   const x = left + (range.goalColumn ?? (view.coordsAtPos(pos, 1)?.left ?? left) - left);
