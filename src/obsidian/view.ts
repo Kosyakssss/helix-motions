@@ -29,7 +29,7 @@ export interface ViewEnv {
   hostFor(view: EditorView): Host;
   insertKeysHelix(): boolean;
   physicalKeys(): boolean;
-  suggestOpen(): boolean;
+  suggestTakes(event: KeyboardEvent): boolean;
   onFocusChange(view: EditorView): void;
   onRender(view: EditorView): void;
   onChanges(view: EditorView, changes: import("@codemirror/state").ChangeSet): void;
@@ -146,7 +146,7 @@ export function helixExtension(env: ViewEnv): Extension {
     const value = view.state.field(helixField, false);
     if (!value) return false;
     const mode = value.mode;
-    if (mode === "insert" && env.suggestOpen() && !editor.activePrompt) return false;
+    if (mode === "insert" && env.suggestTakes(event) && !editor.activePrompt) return false;
     const dead = event.key === "Dead";
     if (dead && mode === "insert" && !editor.activePrompt) return false;
     const literal = literalWanted(editor, mode);

@@ -1,4 +1,4 @@
-import { MarkdownView, Notice, type Editor, type EventRef, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
+import { MarkdownView, Notice, Platform, type Editor, type EventRef, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { Extension, TransactionSpec } from "@codemirror/state";
 import { HelixEditor, Context } from "./core/editor";
@@ -120,12 +120,13 @@ export default class HelixMotionsPlugin extends Plugin {
         editor: this.helix,
         hostFor: (view) => this.hostForView(view),
         insertKeysHelix: () => this.settings.insertKeys === "helix",
-        suggestOpen: () => this.suggestOpen(),
+        suggestTakes: (event) => this.suggestTakes(event),
         onFocusChange: (view) => {
           this.activeView = view;
           this.refreshStatus();
         },
         onRender: (view) => {
+          if (view.state.field(helixField, false)?.mode !== "insert") this.openSuggest(view)?.close();
           if (view.hasFocus || this.activeView === view) {
             this.activeView = view;
             this.refreshStatus();
@@ -397,9 +398,26 @@ export default class HelixMotionsPlugin extends Plugin {
     await view.save();
   }
 
-  suggestOpen(): boolean {
-    const suggest = (this.app.workspace as unknown as { editorSuggest?: { currentSuggest?: unknown } }).editorSuggest;
-    return !!suggest?.currentSuggest;
+  private openSuggest(view?: EditorView): Suggest | null {
+    const suggest = (this.app.workspace as unknown as { editorSuggest?: { currentSuggest?: Suggest | null } }).editorSuggest?.currentSuggest;
+    if (!suggest?.isOpen) return null;
+    if (view && suggest.context?.editor && (suggest.context.editor as unknown as { cm?: EditorView }).cm !== view) return null;
+    return suggest;
+  }
+
+  suggestTakes(event: KeyboardEvent): boolean {
+    const keys = this.openSuggest()?.scope?.keys ?? [];
+    const held = new Set<string>();
+    if (event.shiftKey) held.add("Shift");
+    if (event.altKey) held.add("Alt");
+    if (event.ctrlKey) held.add(Platform.isMacOS ? "Ctrl" : "Mod");
+    if (event.metaKey) held.add(Platform.isMacOS ? "Mod" : "Meta");
+    return keys.some((k) => {
+      if (k.key !== null && k.key.toLowerCase() !== event.key.toLowerCase()) return false;
+      if (k.modifiers === null) return true;
+      const wanted = new Set(k.modifiers.split(",").filter((m) => m !== "").map((m) => (m === "Ctrl" && !Platform.isMacOS ? "Mod" : m)));
+      return wanted.size === held.size && [...wanted].every((m) => held.has(m));
+    });
   }
 
   private countWholeFile(editor: Editor): void {
@@ -441,6 +459,13 @@ export default class HelixMotionsPlugin extends Plugin {
     await this.saveData(this.settings);
     this.helix.helixAutoPairs = this.settings.autoPairs === "helix";
   }
+}
+
+interface Suggest {
+  isOpen?: boolean;
+  context?: { editor?: Editor } | null;
+  scope?: { keys?: { modifiers: string | null; key: string | null }[] };
+  close(): void;
 }
 
 export { Context };
