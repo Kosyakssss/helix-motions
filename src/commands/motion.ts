@@ -12,9 +12,9 @@ import {
   movePrevParagraph,
   moveVertically,
   moveVisualVertically,
-  aimAtWidget,
+  aimAt,
   restoreVisualRows,
-  visualRowOffset,
+  type Aim,
   wordMove,
   type Movement,
   type WordMotionTarget,
@@ -68,18 +68,17 @@ export function moveVisualSelection(
   move: (range: Range) => Range,
   extra: TransactionSpec = {},
 ): void {
-  const doc = docOf(cx);
-  const offsets: (number | null)[] = [];
+  const aims: Aim[] = [];
   const next = selOf(cx).transform((r) => {
     const target = move(r);
-    const moved = target === r ? r : aimAtWidget(view, target, behaviour);
-    offsets.push(visualRowOffset(view, moved.cursor(doc)));
-    return moved;
+    const aim = target === r ? { range: r, offset: null, span: null } : aimAt(view, target, behaviour);
+    aims.push(aim);
+    return aim.range;
   });
   setSel(cx, next, extra);
   const sel = selOf(cx);
-  if (sel.ranges.length !== offsets.length) return;
-  restoreVisualRows(view, sel.ranges, offsets, behaviour, (fixed) => {
+  if (sel.ranges.length !== aims.length) return;
+  restoreVisualRows(view, sel.ranges, aims, behaviour, (fixed) => {
     if (selOf(cx) === sel) setSel(cx, new Selection(fixed, sel.primaryIndex));
   });
 }

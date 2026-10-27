@@ -150,26 +150,42 @@ export function moveVisualVertically(
   return range.putCursor(doc, pos, behaviour === "extend").withGoal(goal);
 }
 
-export function aimAtWidget(view: EditorView, range: Range, behaviour: Movement): Range {
+export interface Aim {
+  range: Range;
+  offset: number | null;
+  span: readonly [number, number] | null;
+}
+
+export function aimAt(view: EditorView, range: Range, behaviour: Movement): Aim {
   const goal = range.goalColumn;
   const doc = view.state.doc;
   const pos = range.cursor(doc);
   const coords = view.coordsAtPos(pos, 1);
-  if (goal === undefined || !coords) return skipHidden(view, range, behaviour);
+  const plain = (r: Range): Aim => ({ range: r, offset: visualRowOffset(view, r.cursor(doc)), span: null });
+  if (goal === undefined || !coords) return plain(skipHidden(view, range, behaviour));
   const x = view.contentDOM.getBoundingClientRect().left + goal;
   const hit = view.dom.ownerDocument.elementFromPoint(x, (coords.top + coords.bottom) / 2);
   const line = hit?.closest(".cm-line");
   let widget = hit?.closest('[contenteditable="false"]');
-  if (!line || !widget || !line.contains(widget) || !view.contentDOM.contains(line)) return skipHidden(view, range, behaviour);
+  if (!line || !widget || !line.contains(widget) || !view.contentDOM.contains(line)) return plain(skipHidden(view, range, behaviour));
   while (widget.parentElement && widget.parentElement !== line && widget.parentElement.closest('[contenteditable="false"]')) {
     widget = widget.parentElement.closest('[contenteditable="false"]')!;
   }
   const parent = widget.parentNode!;
   const index = Array.prototype.indexOf.call(parent.childNodes, widget);
-  const start = view.posAtDOM(parent, index);
-  const end = view.posAtDOM(parent, index + 1);
-  if (end <= start || start === pos || doc.lineAt(start).number !== doc.lineAt(pos).number) return range;
-  return range.putCursor(doc, start, behaviour === "extend").withGoal(goal);
+  let from = view.posAtDOM(parent, index);
+  const to = view.posAtDOM(parent, index + 1);
+  const docLine = doc.lineAt(pos);
+  if (to <= from || from < docLine.from || from > docLine.to) return plain(range);
+  while (from > docLine.from && zeroWidth(view, from - 1)) from--;
+  const aimed = from === pos ? range : range.putCursor(doc, from, behaviour === "extend").withGoal(goal);
+  return { range: aimed, offset: visualRowOffset(view, from), span: [from, to] };
+}
+
+function zeroWidth(view: EditorView, pos: number): boolean {
+  const a = view.coordsAtPos(pos, 1);
+  const b = view.coordsAtPos(pos + 1, -1);
+  return !!a && !!b && Math.abs(b.left - a.left) < 0.5 && Math.abs(b.top - a.top) < 1;
 }
 
 function skipHidden(view: EditorView, range: Range, behaviour: Movement): Range {
@@ -177,12 +193,7 @@ function skipHidden(view: EditorView, range: Range, behaviour: Movement): Range 
   const start = range.cursor(doc);
   const end = doc.lineAt(start).to;
   let pos = start;
-  while (pos < end) {
-    const a = view.coordsAtPos(pos, 1);
-    const b = view.coordsAtPos(pos + 1, -1);
-    if (!a || !b || Math.abs(b.left - a.left) >= 0.5 || Math.abs(b.top - a.top) >= 1) break;
-    pos++;
-  }
+  while (pos < end && zeroWidth(view, pos)) pos++;
   if (pos === start || pos === end) return range;
   return range.putCursor(doc, pos, behaviour === "extend").withGoal(range.goalColumn);
 }
@@ -195,29 +206,36 @@ export function visualRowOffset(view: EditorView, pos: number): number | null {
 export function restoreVisualRows(
   view: EditorView,
   ranges: readonly Range[],
-  offsets: readonly (number | null)[],
+  aims: readonly Aim[],
   behaviour: Movement,
   apply: (ranges: Range[]) => void,
 ): void {
   const doc = view.state.doc;
   queueMicrotask(() => {
     if (view.state.doc !== doc) return;
-    const fixed = ranges.map((r, i) => restoreVisualRow(view, r, offsets[i] ?? null, behaviour));
+    const fixed = ranges.map((r, i) => restoreVisualRow(view, r, aims[i], behaviour));
     if (fixed.some((r, i) => r !== ranges[i])) apply(fixed);
   });
 }
 
-function restoreVisualRow(view: EditorView, range: Range, offset: number | null, behaviour: Movement): Range {
+function restoreVisualRow(view: EditorView, range: Range, aim: Aim | undefined, behaviour: Movement): Range {
   const doc = view.state.doc;
   const pos = range.cursor(doc);
   const now = visualRowOffset(view, pos);
   const coords = view.coordsAtPos(pos, 1);
-  if (offset === null || now === null || !coords || Math.abs(now - offset) < (coords.bottom - coords.top) / 2) return range;
+  if (!aim || aim.offset === null || now === null || !coords) return range;
   const block = view.lineBlockAt(pos);
   const left = view.contentDOM.getBoundingClientRect().left;
-  const x = left + (range.goalColumn ?? (view.coordsAtPos(pos, 1)?.left ?? left) - left);
-  const y = view.documentTop + block.top + offset + view.defaultLineHeight / 2;
-  const target = view.posAtCoords({ x, y }, false);
+  const x = left + (range.goalColumn ?? coords.left - left);
+  const moved = Math.abs(now - aim.offset) >= (coords.bottom - coords.top) / 2;
+  if (!moved && !aim.span) return range;
+  const y = moved ? view.documentTop + block.top + aim.offset + view.defaultLineHeight / 2 : (coords.top + coords.bottom) / 2;
+  let target = view.posAtCoords({ x, y }, false);
+  if (!moved && aim.span) {
+    const [from, to] = aim.span;
+    if (pos < from || pos >= to) return range;
+    target = Math.max(from, Math.min(to - 1, target));
+  }
   if (target < block.from || target > block.to || target === pos) return range;
   return range.putCursor(doc, target, behaviour === "extend").withGoal(range.goalColumn);
 }
