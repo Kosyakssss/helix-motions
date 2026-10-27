@@ -150,6 +150,40 @@ export function moveVisualVertically(
   return range.putCursor(doc, pos, behaviour === "extend").withGoal(goal);
 }
 
+export function visualRowOffset(view: EditorView, pos: number): number | null {
+  const coords = view.coordsAtPos(pos, 1);
+  return coords ? coords.top - view.documentTop - view.lineBlockAt(pos).top : null;
+}
+
+export function restoreVisualRows(
+  view: EditorView,
+  ranges: readonly Range[],
+  offsets: readonly (number | null)[],
+  behaviour: Movement,
+  apply: (ranges: Range[]) => void,
+): void {
+  const doc = view.state.doc;
+  queueMicrotask(() => {
+    if (view.state.doc !== doc) return;
+    const fixed = ranges.map((r, i) => restoreVisualRow(view, r, offsets[i] ?? null, behaviour));
+    if (fixed.some((r, i) => r !== ranges[i])) apply(fixed);
+  });
+}
+
+function restoreVisualRow(view: EditorView, range: Range, offset: number | null, behaviour: Movement): Range {
+  const doc = view.state.doc;
+  const pos = range.cursor(doc);
+  const now = visualRowOffset(view, pos);
+  if (offset === null || now === null || Math.abs(now - offset) < 1) return range;
+  const block = view.lineBlockAt(pos);
+  const left = view.contentDOM.getBoundingClientRect().left;
+  const x = left + (range.goalColumn ?? (view.coordsAtPos(pos, 1)?.left ?? left) - left);
+  const y = view.documentTop + block.top + offset + view.defaultLineHeight / 2;
+  const target = view.posAtCoords({ x, y }, false);
+  if (target < block.from || target > block.to || target === pos) return range;
+  return range.putCursor(doc, target, behaviour === "extend").withGoal(range.goalColumn);
+}
+
 function sameVisualRow(view: EditorView, a: number, b: number): boolean {
   if (a === b) return true;
   const ca = view.coordsAtPos(a, 1);

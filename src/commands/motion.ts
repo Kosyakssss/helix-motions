@@ -11,11 +11,13 @@ import {
   movePrevParagraph,
   moveVertically,
   moveVisualVertically,
+  restoreVisualRows,
+  visualRowOffset,
   wordMove,
   type Movement,
   type WordMotionTarget,
 } from "../movement";
-import { Range, type Direction } from "../selection";
+import { Range, Selection, type Direction } from "../selection";
 import { charAt, lineIndex, nextCharPos, prevCharPos } from "../core/text";
 import { docOf, firstNonWhitespaceChar, lineEndCharIndex, lineToChar, modeOf, selOf, setSel } from "./util";
 import { pushJump } from "./jumps";
@@ -50,11 +52,25 @@ function logical(cx: Context) {
     moveVertically(doc, range, dir, count, behaviour, cx.editor.config.tabWidth);
 }
 
-function visual(cx: Context) {
+function moveVisual(cx: Context, dir: Direction, behaviour: Movement): void {
   const view = cx.host.view;
-  if (!view || !cx.editor.visualLines) return logical(cx);
-  return (_doc: Text, range: Range, dir: Direction, count: number, behaviour: Movement) =>
-    moveVisualVertically(view, range, dir, count, behaviour);
+  if (!view || !cx.editor.visualLines) return moveImpl(cx, logical(cx), dir, behaviour);
+  const offsets: (number | null)[] = [];
+  moveImpl(
+    cx,
+    (doc, range, d, count, b) => {
+      const moved = moveVisualVertically(view, range, d, count, b);
+      offsets.push(visualRowOffset(view, moved.cursor(doc)));
+      return moved;
+    },
+    dir,
+    behaviour,
+  );
+  const sel = selOf(cx);
+  if (sel.ranges.length !== offsets.length) return;
+  restoreVisualRows(view, sel.ranges, offsets, behaviour, (fixed) => {
+    if (selOf(cx) === sel) setSel(cx, new Selection(fixed, sel.primaryIndex));
+  });
 }
 
 export const motionCommands: Record<string, CommandFn> = {
@@ -62,14 +78,14 @@ export const motionCommands: Record<string, CommandFn> = {
   move_char_right: (cx) => moveImpl(cx, moveHorizontally, "forward", "move"),
   move_line_up: (cx) => moveImpl(cx, logical(cx), "backward", "move"),
   move_line_down: (cx) => moveImpl(cx, logical(cx), "forward", "move"),
-  move_visual_line_up: (cx) => moveImpl(cx, visual(cx), "backward", "move"),
-  move_visual_line_down: (cx) => moveImpl(cx, visual(cx), "forward", "move"),
+  move_visual_line_up: (cx) => moveVisual(cx, "backward", "move"),
+  move_visual_line_down: (cx) => moveVisual(cx, "forward", "move"),
   extend_char_left: (cx) => moveImpl(cx, moveHorizontally, "backward", "extend"),
   extend_char_right: (cx) => moveImpl(cx, moveHorizontally, "forward", "extend"),
   extend_line_up: (cx) => moveImpl(cx, logical(cx), "backward", "extend"),
   extend_line_down: (cx) => moveImpl(cx, logical(cx), "forward", "extend"),
-  extend_visual_line_up: (cx) => moveImpl(cx, visual(cx), "backward", "extend"),
-  extend_visual_line_down: (cx) => moveImpl(cx, visual(cx), "forward", "extend"),
+  extend_visual_line_up: (cx) => moveVisual(cx, "backward", "extend"),
+  extend_visual_line_down: (cx) => moveVisual(cx, "forward", "extend"),
   goto_line_end: (cx) => gotoLineEnd(cx, modeOf(cx) === "select" ? "extend" : "move"),
   extend_to_line_end: (cx) => gotoLineEnd(cx, "extend"),
   goto_line_end_newline: (cx) => gotoLineEndNewline(cx, modeOf(cx) === "select" ? "extend" : "move"),
