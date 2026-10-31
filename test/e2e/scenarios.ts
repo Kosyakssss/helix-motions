@@ -449,8 +449,10 @@ const checks: Check[] = [
       setDoc("a (b #[c|]# d) e\n");
       keys("mm");
       expectEq("mm finds the enclosing pair", state().markup, "a (b c d#[)|]# e\n");
+      evalJs(`app.plugins.plugins["helix-motions"].helix.helixAutoPairs = true`);
       setDoc("text\n#[\n|]#");
       keys("i“<esc>");
+      evalJs(`(p => p.helix.helixAutoPairs = p.settings.autoPairs === "helix")(app.plugins.plugins["helix-motions"])`);
       expectEq("markdown layer pairs smart quotes", state().markup, "text\n“#[|”]#\n");
     },
   },

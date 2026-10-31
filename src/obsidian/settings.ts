@@ -4,12 +4,12 @@ import { EditorView, keymap } from "@codemirror/view";
 import { defaultKeymap } from "@codemirror/commands";
 
 export interface Settings {
-  autoPairs: "helix" | "obsidian";
+  autoPairs: "obsidian" | "helix";
   insertKeys: "obsidian" | "helix";
   physicalKeys: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { autoPairs: "helix", insertKeys: "obsidian", physicalKeys: true };
+export const DEFAULT_SETTINGS: Settings = { autoPairs: "obsidian", insertKeys: "obsidian", physicalKeys: true };
 
 export interface SettingsHost extends Plugin {
   settings: Settings;
@@ -40,8 +40,8 @@ export class HelixSettingTab extends PluginSettingTab {
         items: [
           {
             name: "Auto-pairs",
-            desc: "Helix: auto-pairs from Helix and the [editor.auto-pairs] table in helix.toml. Obsidian: the auto-pair options in the editor settings.",
-            control: { type: "dropdown", key: "autoPairs", options: { helix: "Helix", obsidian: "Obsidian" }, defaultValue: "helix" },
+            desc: "Obsidian: the auto-pair options in the editor settings. Helix: auto-pairs from Helix and the [editor.auto-pairs] table in helix.toml.",
+            control: { type: "dropdown", key: "autoPairs", options: { obsidian: "Obsidian", helix: "Helix" }, defaultValue: "obsidian" },
           },
           {
             name: "Enter, tab and backspace in insert mode",

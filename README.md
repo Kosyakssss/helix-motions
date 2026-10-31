@@ -7,7 +7,7 @@ A full port of [Helix](https://helix-editor.com) editing to Obsidian, made from 
 - **Helix's own engines.** Search runs Helix's regex crates, compiled to WebAssembly. Syntax-aware commands parse notes with the same tree-sitter markdown grammars as Helix. Grapheme clusters follow the same Unicode rules.
 - **Tested against Helix.** About 34,000 key sequences run in real Helix and in the plugin, and CI compares the text, the selections and the mode after each one. They must match exactly.
 
-The port follows Helix at commit `ba40e54742`, with [PR #16370](https://github.com/helix-editor/helix/pull/16370) applied.
+The port follows Helix at commit `ba40e54742`.
 
 ![Six cursors from one regex select, with the selection count in Helix's statusline](docs/screenshots/1-multiple-cursors.png)
 
@@ -54,7 +54,7 @@ Some Helix commands work on Obsidian's own things:
 | `gr` | Backlinks |
 | `:w`, `:q`, `:o`, `:bn`, `Ctrl-w` | Save, close, open, tabs, splits |
 
-Settings that Helix can't decide live in the settings tab: auto-pairs from Helix or from Obsidian, Enter, Tab and Backspace in insert mode from Helix or from Obsidian, and reading keys by position for non-Latin keyboard layouts.
+Settings that Helix can't decide live in the settings tab: auto-pairs from Obsidian (default) or from Helix, Enter, Tab and Backspace in insert mode from Obsidian (default) or from Helix, and reading keys by position for non-Latin keyboard layouts.
 
 ## Capabilities
 
@@ -71,7 +71,7 @@ Settings that Helix can't decide live in the settings tab: auto-pairs from Helix
 
 ## Credits
 
-Ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742` with [PR #16370](https://github.com/helix-editor/helix/pull/16370) applied (auto-pairs add spaces only inside `()` and `{}`, so `- [ ]` stays a task), under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
+Ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742`, under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
 
 ## License
 

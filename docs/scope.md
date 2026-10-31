@@ -1,6 +1,6 @@
 # Scope
 
-Source: `helix-editor/helix` master `ba40e54742` (behaviour: plus PR #16370, auto-pair spaces only inside `()` and `{}`), files `book/src/generated/static-cmd.md`, `book/src/generated/typable-cmd.md`, `book/src/editor.md`, `helix-term/src/keymap/default.rs`.
+Source: `helix-editor/helix` master `ba40e54742`, files `book/src/generated/static-cmd.md`, `book/src/generated/typable-cmd.md`, `book/src/editor.md`, `helix-term/src/keymap/default.rs`.
 
 Marks:
 
@@ -279,7 +279,7 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 | `color-modes` | adapt | Mode colour in the status item. |
 | `statusline.*` | adapt | One block at the left end of Obsidian's status bar: `left`, then `center`, then `right`, with Helix's text for each element. Elements with Obsidian data: `mode`, `file-name`, `file-base-name`, `file-absolute-path`, `file-modification-indicator` (unsaved changes), `file-line-ending` (LF), `file-indent-style` (Obsidian's indent setting), `file-type` (markdown), `diagnostics` and `workspace-diagnostics` (unresolved links as warnings, filtered by `statusline.diagnostics` and `statusline.workspace-diagnostics`), `selections`, `primary-selection-length`, `position`, `position-percentage`, `total-line-numbers`, `register`, `current-working-directory` (vault name), `separator`, `spacer`, and the `mode.*` texts. Empty, as in Helix without them: `spinner` (LSP), `version-control`, `read-only-indicator`, `file-encoding` (UTF-8), `code-action-hint`. Each element's text is trimmed and elements are one cell apart; non-empty groups are split by a line. Mode colors come from the theme's `--color-blue`, `--color-orange` and `--color-pink`, with the text color of higher contrast. Pending keys and the macro register show in a strip to the left of the block. Messages show in the editor's bottom row, as in Helix's command line row. |
 | `auto-info` | adapt | Which-key panel. |
-| `auto-pairs` | port | `auto_pairs.rs`, full. Plugin option picks Helix's (default) or Obsidian's. With Helix's on, Obsidian's auto-pair settings are bypassed. |
+| `auto-pairs` | port | `auto_pairs.rs`, full. Plugin option picks Obsidian's (default) or Helix's. With Helix's on, Obsidian's auto-pair settings are bypassed. |
 | `smart-tab.*` | port | Applies when the Helix insert-keys option is on. |
 | `line-number`, `gutters` | adapt | Switch Obsidian's own "Show line number" setting, only when `helix.toml` sets one of these keys. `relative` gives a warning and absolute numbers. We draw no numbers. |
 | `cursorline` | adapt | Highlights every line with a cursor, viewport only. Obsidian's own active line follows CodeMirror's caret, which sits on the next line after `x`, so it can't be used. |
@@ -314,7 +314,7 @@ Options that Helix does not have. They live in the plugin's settings tab, not in
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| Auto-pairs | Helix | Helix: `auto_pairs.rs` and `[editor.auto-pairs]`. Obsidian: Obsidian's own auto-pair settings. |
+| Auto-pairs | Obsidian | Obsidian: Obsidian's own auto-pair settings. Helix: `auto_pairs.rs` and `[editor.auto-pairs]`. |
 | Insert keys (Enter, Tab, Backspace) | Obsidian | Obsidian: list continuation, list indent, table cells. Helix: `insert_newline`, `smart_tab`, `delete_char_backward` ports. |
 | Read keys by position | On | Normal and select mode read keys by their US-layout position with non-Latin layouts. |
 

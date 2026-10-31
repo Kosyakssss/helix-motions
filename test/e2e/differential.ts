@@ -1,7 +1,7 @@
 import { loadCache } from "../oracle/oracle";
 import { handSuite } from "../oracle/suites";
 import { parseMacro } from "../../src/keys";
-import { openScratch, sendKeys, setDoc, api } from "./obsidian";
+import { openScratch, sendKeys, setDoc, api, evalJs } from "./obsidian";
 
 interface S {
   text: string;
@@ -18,6 +18,7 @@ const cache = loadCache();
 const cases = handSuite().filter((c) => texts.some((t) => c.id.startsWith(t + "#")) && !EXCLUDE.test(c.keys));
 openScratch();
 api("a.useConfig('')");
+evalJs(`app.plugins.plugins["helix-motions"].helix.helixAutoPairs = true`);
 let pass = 0;
 const fails: string[] = [];
 for (const c of cases) {
@@ -35,4 +36,5 @@ for (const c of cases) {
 }
 console.log(fails.slice(0, Number(process.env.SHOW ?? 40)).join("\n"));
 api("a.useConfig(null)");
+evalJs(`(p => p.helix.helixAutoPairs = p.settings.autoPairs === "helix")(app.plugins.plugins["helix-motions"])`);
 console.log(`\n${pass} pass, ${fails.length} fail of ${pass + fails.length}`);
