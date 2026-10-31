@@ -22,6 +22,10 @@ jobs:
       - run: bun run lint
       - name: Check that the tag matches manifest.json
         run: test "$(jq -r .version manifest.json)" = "$GITHUB_REF_NAME"
+      - name: Check that the tag is annotated with release notes
+        run: |
+          git fetch --force origin "refs/tags/$GITHUB_REF_NAME:refs/tags/$GITHUB_REF_NAME"
+          test "$(git cat-file -t "$GITHUB_REF_NAME")" = tag
       - run: bun build.ts --out dist
       - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8
         with:
@@ -32,4 +36,4 @@ jobs:
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/main.js dist/manifest.json dist/styles.css --title "$GITHUB_REF_NAME" --generate-notes
+        run: gh release create "$GITHUB_REF_NAME" dist/main.js dist/manifest.json dist/styles.css --title "$GITHUB_REF_NAME" --notes-from-tag

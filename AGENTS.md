@@ -43,9 +43,9 @@ Only the maintainer pushes, tags and releases.
 
 1. Bump `manifest.json` and add the version to `versions.json`. Commit with the version as the message, for example `0.1.7`.
 2. `git push origin main`. `origin` pushes to GitHub and Tangled.
-3. When CI passes, `git tag x.y.z` (no `v` prefix) and `git push origin x.y.z`.
-4. When the Release workflow passes, check that the release has `main.js`, `manifest.json` and `styles.css`.
-5. Every release has brief release notes. The workflow writes generated notes that only link the full changelog. Replace them with `gh release edit x.y.z --notes-file <file>`: a short bullet list of user-visible changes since the previous version, then the changelog link.
+3. Write the release notes in a file: a short bullet list of user-visible changes since the previous version, then `**Full Changelog**: https://github.com/Kosyakssss/helix-motions/compare/<previous>...x.y.z`.
+4. When CI passes, make an annotated tag with the notes as its message: `git tag -a x.y.z --cleanup=verbatim -F <file>` (no `v` prefix), then `git push origin x.y.z`. Git keeps the notes, so GitHub and Tangled both show them. The Release workflow fails on a tag without notes, and uses the tag message as the GitHub release notes.
+5. When the Release workflow passes, check that the release has `main.js`, `manifest.json`, `styles.css` and the notes.
 
 ## Style
 
