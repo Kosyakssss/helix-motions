@@ -6,17 +6,18 @@ import type { Host } from "./core/host";
 import { buildKeymaps } from "./keymap";
 import { loadConfig } from "./config-loader";
 import { defaultConfig, type Config } from "./config";
-import { helixExtension } from "./obsidian/view";
+import { helixExtension, uiSignature } from "./view/view";
 import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
-import { makeViewOps } from "./obsidian/viewops";
-import { releaseBar, renderStatus } from "./obsidian/status";
+import { makeViewOps } from "./view/viewops";
+import { releaseBar, renderStatus, syncBar } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
-import { loadRegex, loadSyntax } from "./obsidian/syntax";
+import { loadRegex } from "./view/wasm";
+import { loadSyntax } from "./view/syntax";
 import { setRegexEngine } from "./core/regex";
 import type { SyntaxSessions } from "./syntax/languages";
-import { SystemClipboard } from "./obsidian/clipboard";
+import { SystemClipboard } from "./view/clipboard";
 import { helixField } from "./state";
 import { Registers } from "./registers";
 import { commitHistoryNow } from "./commands/jumps";
@@ -145,6 +146,13 @@ export default class HelixMotionsPlugin extends Plugin {
           this.syntaxSessions?.close(view);
         },
         physicalKeys: () => this.settings.physicalKeys,
+        statusBar: (view) => view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar"),
+        joinStatus: (view, joined) => {
+          const statusEl = view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar .hx-status");
+          if (!statusEl) return;
+          statusEl.toggleClass("hx-status-joined", joined);
+          syncBar(statusEl);
+        },
       });
     this.registerEditorExtension(this.editorExtension);
     this.statusEl = this.addStatusBarItem();
@@ -430,14 +438,7 @@ export default class HelixMotionsPlugin extends Plugin {
   private uiSignature = "";
 
   refresh(host: Host): void {
-    const p = this.helix.activePrompt;
-    const auto = this.helix.autoinfo;
-    const sig = JSON.stringify([
-      p ? [p.label, p.line, p.cursor, p.selection, p.completions.length] : null,
-      auto ? ("kind" in auto ? auto.name : auto.title) : null,
-      this.helix.status,
-      this.helix.jumpLabels.get(host.id)?.length ?? 0,
-    ]);
+    const sig = uiSignature(this.helix, host);
     if (sig !== this.uiSignature) {
       this.uiSignature = sig;
       host.view?.dispatch({});

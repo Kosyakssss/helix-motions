@@ -11,4 +11,8 @@ export default defineConfig([
       },
     },
   },
+  {
+    files: ["src/view/**"],
+    rules: { "obsidianmd/prefer-create-el": "off" },
+  },
 ]);

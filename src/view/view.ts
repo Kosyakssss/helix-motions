@@ -15,7 +15,8 @@ import { keyFromDom } from "../keys";
 import { search, type TrieNode } from "../keymap/trie";
 import { nextGraphemeBoundary } from "../graphemes";
 import { cursorLayers } from "./cursor";
-import { syncBar } from "./status";
+import { make, setProps } from "./dom";
+import { helixTheme } from "./theme";
 import { helixField, helixOwned, historyField, setHelix, syncNativeSelection, toNative } from "../state";
 import { hookInsert } from "../auto-pairs";
 import { autoPairsFor, insertDiffers, mayAutoPair } from "../commands/insert";
@@ -36,6 +37,8 @@ export interface ViewEnv {
   onDocTransaction(view: EditorView, tr: import("@codemirror/state").Transaction): void;
   onViewOpen(view: EditorView): void;
   onViewClose(view: EditorView): void;
+  statusBar?(view: EditorView): HTMLElement | null;
+  joinStatus?(view: EditorView, joined: boolean): void;
 }
 
 class LabelWidget extends WidgetType {
@@ -46,7 +49,7 @@ class LabelWidget extends WidgetType {
     return other.text === this.text;
   }
   toDOM(): HTMLElement {
-    return createSpan({ cls: "hx-jump-label", text: this.text });
+    return make("span", "hx-jump-label", this.text);
   }
 }
 
@@ -315,10 +318,10 @@ export function helixExtension(env: ViewEnv): Extension {
   });
 
   const panel = showPanel.of((view): Panel => {
-    const dom = createDiv({ cls: "hx-panel" });
-    const info = dom.createDiv({ cls: "hx-autoinfo hx-hidden" });
-    const prompt = dom.createDiv({ cls: "hx-prompt hx-hidden" });
-    const message = dom.createDiv({ cls: "hx-message hx-hidden" });
+    const dom = make("div", "hx-panel");
+    const info = make("div", "hx-autoinfo hx-hidden", undefined, dom);
+    const prompt = make("div", "hx-prompt hx-hidden", undefined, dom);
+    const message = make("div", "hx-message hx-hidden", undefined, dom);
     const render = () => renderPanel(view, env, dom, info, prompt, message);
     render();
     return {
@@ -339,6 +342,7 @@ export function helixExtension(env: ViewEnv): Extension {
     autoPairsInput,
     decorations,
     cursorLayers(editor),
+    helixTheme,
     cursorLine,
     attributes,
     scrollMargins,
@@ -350,52 +354,48 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
   const { editor } = env;
   const host = env.hostFor(view);
   const active = editor.activePrompt && editor.activePrompt.host.id === host.id && view.hasFocus ? editor.activePrompt : null;
-  prompt.empty();
-  prompt.toggleClass("hx-hidden", !active);
+  prompt.replaceChildren();
+  prompt.classList.toggle("hx-hidden", !active);
   if (active) {
     if (active.completions.length > 0) {
-      const list = prompt.createDiv({ cls: "hx-completions" });
+      const list = make("div", "hx-completions", undefined, prompt);
       active.completions.slice(0, 40).forEach((c, i) => {
-        list.createSpan({ cls: i === active.selection ? "hx-completion hx-completion-selected" : "hx-completion", text: c.label });
+        make("span", i === active.selection ? "hx-completion hx-completion-selected" : "hx-completion", c.label, list);
       });
     }
-    prompt.createSpan({ cls: "hx-prompt-label", text: active.label });
-    prompt.createSpan({ text: active.line.slice(0, active.cursor) });
-    prompt.createSpan({ cls: "hx-prompt-cursor", text: active.line.slice(active.cursor, active.cursor + 1) || " " });
-    prompt.createSpan({ text: active.line.slice(active.cursor + 1) });
+    make("span", "hx-prompt-label", active.label, prompt);
+    make("span", undefined, active.line.slice(0, active.cursor), prompt);
+    make("span", "hx-prompt-cursor", active.line.slice(active.cursor, active.cursor + 1) || " ", prompt);
+    make("span", undefined, active.line.slice(active.cursor + 1), prompt);
   }
   const status = !active && view.hasFocus ? editor.status : null;
-  message.setText(status?.message ?? "");
-  message.toggleClass("hx-hidden", !status);
-  message.toggleClass("hx-message-error", status?.severity === "error");
-  const statusBar = view.dom.ownerDocument.querySelector(".status-bar");
-  const editorRect = view.dom.getBoundingClientRect();
+  message.textContent = status?.message ?? "";
+  message.classList.toggle("hx-hidden", !status);
+  message.classList.toggle("hx-message-error", status?.severity === "error");
+  const statusBar = env.statusBar?.(view) ?? null;
+  const editorRect = statusBar ? view.dom.getBoundingClientRect() : null;
   const statusRect = statusBar?.getBoundingClientRect();
   const strip = statusBar?.querySelector(".hx-status-strip:not(.hx-hidden)")?.getBoundingClientRect();
-  const covered = statusRect && statusRect.height > 0 && statusRect.top < editorRect.bottom && statusRect.left < editorRect.right;
-  const coverLeft = covered ? Math.min(statusRect.left, strip?.left ?? Infinity) : editorRect.right;
-  dom.setCssProps({ "--hx-bar-overlap": `${Math.max(0, editorRect.right - coverLeft)}px` });
-  const opened = dom.hasClass("hx-panel-empty") && (!!active || !!status);
-  dom.toggleClass("hx-panel-empty", !active && !status);
+  const covered = editorRect && statusRect && statusRect.height > 0 && statusRect.top < editorRect.bottom && statusRect.left < editorRect.right;
+  const overlap = covered ? Math.max(0, editorRect.right - Math.min(statusRect.left, strip?.left ?? Infinity)) : 0;
+  setProps(dom, { "--hx-bar-overlap": `${overlap}px` });
+  const opened = dom.classList.contains("hx-panel-empty") && (!!active || !!status);
+  dom.classList.toggle("hx-panel-empty", !active && !status);
   if (opened) {
     window.requestAnimationFrame(() => {
       if (view.dom.isConnected) view.dispatch({ effects: EditorView.scrollIntoView(view.state.selection.main.head, { y: "nearest" }) });
     });
   }
-  const statusEl = view.hasFocus ? statusBar?.querySelector<HTMLElement>(".hx-status") : null;
-  if (statusEl) {
-    statusEl.toggleClass("hx-status-joined", !!covered && (!!active || !!status));
-    syncBar(statusEl);
-  }
-  info.empty();
+  if (view.hasFocus) env.joinStatus?.(view, !!covered && (!!active || !!status));
+  info.replaceChildren();
   const auto = editor.config.autoInfo && view.hasFocus ? editor.autoinfo : null;
-  info.toggleClass("hx-hidden", !auto);
+  info.classList.toggle("hx-hidden", !auto);
   if (!auto) return;
-  const title = info.createDiv({ cls: "hx-autoinfo-title" });
+  const title = make("div", "hx-autoinfo-title", undefined, info);
   const rows: [string, string][] = [];
   let unavailable = new Set<string>();
   if ("kind" in auto) {
-    title.setText(auto.name);
+    title.textContent = auto.name;
     const grouped = new Map<string, string[]>();
     for (const [key, trie] of auto.map) {
       const desc = trie.kind === "node" ? trie.name : trie.kind === "sequence" ? "[Multiple commands]" : describe(trie.command);
@@ -411,17 +411,28 @@ function renderPanel(view: EditorView, env: ViewEnv, dom: HTMLElement, info: HTM
         .map(([, t]) => describe((t as { command: import("../keymap/trie").MappableCommand }).command)),
     );
   } else {
-    title.setText(auto.title);
+    title.textContent = auto.title;
     rows.push(...auto.body);
   }
   for (const [k, d] of rows) {
-    const row = info.createDiv({ cls: unavailable.has(d) ? "hx-autoinfo-row hx-autoinfo-unavailable" : "hx-autoinfo-row" });
-    row.createSpan({ cls: "hx-autoinfo-key", text: k });
-    row.createSpan({ text: d });
+    const row = make("div", unavailable.has(d) ? "hx-autoinfo-row hx-autoinfo-unavailable" : "hx-autoinfo-row", undefined, info);
+    make("span", "hx-autoinfo-key", k, row);
+    make("span", undefined, d, row);
   }
   const panelRect = dom.getBoundingClientRect();
   const lift = statusRect && statusRect.height > 0 && statusRect.left < panelRect.right ? Math.max(0, panelRect.bottom - statusRect.top) : 0;
-  dom.setCssProps({ "--hx-autoinfo-lift": `${lift}px`, "--hx-autoinfo-room": `${Math.max(0, panelRect.top - lift - editorRect.top - 16)}px` });
+  setProps(dom, { "--hx-autoinfo-lift": `${lift}px`, "--hx-autoinfo-room": `${Math.max(0, panelRect.top - lift - (editorRect ?? view.dom.getBoundingClientRect()).top - 16)}px` });
+}
+
+export function uiSignature(editor: HelixEditor, host: Host): string {
+  const p = editor.activePrompt;
+  const auto = editor.autoinfo;
+  return JSON.stringify([
+    p ? [p.label, p.line, p.cursor, p.selection, p.completions.length] : null,
+    auto ? ("kind" in auto ? auto.name : auto.title) : null,
+    editor.status,
+    editor.jumpLabels.get(host.id)?.length ?? 0,
+  ]);
 }
 
 function describe(command: import("../keymap/trie").MappableCommand): string {

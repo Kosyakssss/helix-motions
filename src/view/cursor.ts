@@ -4,6 +4,7 @@ import type { HelixEditor } from "../core/editor";
 import { nextGraphemeBoundary, prevGraphemeBoundary } from "../graphemes";
 import type { Range as HelixRange } from "../selection";
 import { helixField, type HelixState } from "../state";
+import { make, setProps } from "./dom";
 
 interface Box {
   left: number;
@@ -63,9 +64,9 @@ class CellMarker implements LayerMarker {
   }
 
   draw(): HTMLElement {
-    const el = createDiv();
-    this.apply(el);
-    return el;
+    const node = make("div");
+    this.apply(node);
+    return node;
   }
 
   update(dom: HTMLElement, prev: LayerMarker): boolean {
@@ -74,9 +75,9 @@ class CellMarker implements LayerMarker {
     return true;
   }
 
-  private apply(el: HTMLElement): void {
-    el.className = this.cls;
-    el.setCssProps({
+  private apply(node: HTMLElement): void {
+    node.className = this.cls;
+    setProps(node, {
       "--hx-cell-left": `${this.box.left}px`,
       "--hx-cell-top": `${this.box.top}px`,
       "--hx-cell-width": `${this.box.right - this.box.left}px`,
@@ -84,11 +85,11 @@ class CellMarker implements LayerMarker {
       "--hx-cell-backdrop": this.backdrop?.color ?? "transparent",
       "--hx-cell-backdrop-image": this.backdrop?.image ?? "none",
     });
-    el.empty();
+    node.replaceChildren();
     const g = this.glyph;
     if (!g) return;
-    const span = el.createSpan({ cls: "hx-cell-glyph", text: g.text });
-    span.setCssProps({
+    const span = make("span", "hx-cell-glyph", g.text, node);
+    setProps(span, {
       "--hx-glyph-top": `${g.top}px`,
       "--hx-glyph-height": `${g.height}px`,
       "--hx-glyph-font": g.font,
@@ -212,7 +213,7 @@ function spaceWidth(el: Element): number {
   const font = getComputedStyle(el).font;
   let width = spaces.get(font);
   if (width === undefined) {
-    canvas ??= createEl("canvas").getContext("2d");
+    canvas ??= make("canvas").getContext("2d");
     if (!canvas) return cellWidth(el);
     canvas.font = font;
     width = canvas.measureText(" ").width;
