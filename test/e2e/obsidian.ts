@@ -1,4 +1,4 @@
-import { parseKey } from "../../src/keys";
+import { parseKey } from "helix-cm6";
 
 const VAULT = process.env.HM_VAULT ?? "test-vault";
 

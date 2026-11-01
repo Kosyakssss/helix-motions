@@ -63,15 +63,15 @@ Settings that Helix can't decide live in the settings tab: auto-pairs from Obsid
 - **File list:** lists the vault's file paths, only when you open a picker or complete a path: the file picker in the current folder, headings in the vault (`Space S`), and paths for `:o` and similar commands. Unresolved links come from Obsidian's link index. Nothing leaves the vault.
 - **Obsidian settings:** changes "Show line number" and "Show indentation guides" only when `helix.toml` sets `line-number`, `gutters` or `indent-guides`.
 - **Network:** none.
-- **WebAssembly:** `main.js` contains two compressed WebAssembly files, both built from pinned sources and checked byte for byte in CI:
-  - `tree-sitter/tree-sitter.wasm`: the tree-sitter C library, the two markdown grammars and a small binding (`tree-sitter/binding.c`), built by `tree-sitter/build.sh`.
-  - `regex/regex.wasm`: Helix's regex engine (`regex-cursor` and `regex-automata`, the same versions as Helix) with a small binding (`regex/src/lib.rs`), built by `regex/build.sh`.
+- **WebAssembly:** `main.js` contains two compressed WebAssembly files from [helix-cm6](https://github.com/Kosyakssss/helix-cm6), both built from pinned sources and checked byte for byte in its CI:
+  - `tree-sitter.wasm`: the tree-sitter C library, the two markdown grammars and a small binding.
+  - `regex.wasm`: Helix's regex engine (`regex-cursor` and `regex-automata`, the same versions as Helix) with a small binding.
 
-  `tree-sitter/NOTICE` and `regex/NOTICE` have the licenses.
+  The end of `main.js` has their licenses.
 
 ## Credits
 
-Ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742`, under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
+The Helix engine is [helix-cm6](https://github.com/Kosyakssss/helix-cm6), split out of this plugin as a CodeMirror 6 package. It is ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742`, under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
 
 ## License
 

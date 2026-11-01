@@ -1,4 +1,4 @@
-import { parseMacro } from "../../src/keys";
+import { parseMacro } from "helix-cm6";
 import { api, domKey, evalJs, ob, openScratch, sendDomKey, sendKeys, setDoc, state, type AppState } from "./obsidian";
 
 type Check = { name: string; run: () => void };

@@ -1,29 +1,14 @@
 import { MarkdownView, Notice, Platform, type Editor, type EventRef, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { Extension, TransactionSpec } from "@codemirror/state";
-import { HelixEditor, Context } from "./core/editor";
-import type { Host } from "./core/host";
-import { buildKeymaps } from "./keymap";
-import { loadConfig } from "./config-loader";
-import { defaultConfig, type Config } from "./config";
-import { helixExtension } from "./obsidian/view";
+import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Context, defaultConfig, HelixEditor, helixExtension, helixField, helixOwned, type Host, loadConfig, loadRegex, loadSyntax, makeViewOps, plain, print, Registers, setHelix, type SyntaxSessions, SystemClipboard, toNative, uiRefresher } from "helix-cm6";
 import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
-import { makeViewOps } from "./obsidian/viewops";
-import { releaseBar, renderStatus } from "./obsidian/status";
+import { releaseBar, renderStatus, syncBar } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
-import { loadRegex, loadSyntax } from "./obsidian/syntax";
-import { setRegexEngine } from "./core/regex";
-import type { SyntaxSessions } from "./syntax/languages";
-import { SystemClipboard } from "./obsidian/clipboard";
-import { helixField } from "./state";
-import { Registers } from "./registers";
-import { commitHistoryNow } from "./commands/jumps";
-import { setPathCompleter } from "./commands/typed";
-import { print, plain } from "./core/markup";
-import { setHelix, helixOwned, toNative } from "./state";
 import { DEFAULT_SETTINGS, HelixSettingTab, type Settings } from "./obsidian/settings";
+import { isMarkupSnap } from "./obsidian/selection-snap";
 
 export default class HelixMotionsPlugin extends Plugin {
   override settings: Settings = DEFAULT_SETTINGS;
@@ -69,7 +54,7 @@ export default class HelixMotionsPlugin extends Plugin {
     this.helix.workspace = makeWorkspace(this);
     this.helix.viewOps = makeViewOps(() => this.helix.config.scrolloff);
     this.helix.commentTokens = (host, pos) => commentTokensAt(host.state.doc, pos);
-    void loadSyntax()
+    void loadSyntax(window)
       .then((sessions) => {
         this.syntaxSessions = sessions;
         for (const view of this.syntaxViews) if (!this.isConfigView(view)) sessions.open(view, view.state.doc);
@@ -78,7 +63,9 @@ export default class HelixMotionsPlugin extends Plugin {
       })
       .catch((err: unknown) => console.error("Helix: syntax tree unavailable", err));
     void loadRegex()
-      .then((engine) => setRegexEngine(engine))
+      .then((engine) => {
+        this.helix.regex = engine;
+      })
       .catch((err: unknown) => console.error("Helix: regex engine unavailable", err));
     this.helix.ui = {
       notify: () =>
@@ -107,14 +94,14 @@ export default class HelixMotionsPlugin extends Plugin {
       if (spec[0] === "Enter") return insertNewlineAndIndent(host.view);
       return false;
     };
-    setPathCompleter((prefix) => {
+    this.helix.pathCompleter = (prefix) => {
       const lower = prefix.toLowerCase();
       return this.app.vault
         .getFiles()
         .map((f) => (f.extension === "md" ? f.path.slice(0, -3) : f.path))
         .filter((p) => p.toLowerCase().startsWith(lower) || (lower !== "" && p.toLowerCase().includes(lower)))
         .sort((a, b) => Number(!a.toLowerCase().startsWith(lower)) - Number(!b.toLowerCase().startsWith(lower)) || a.localeCompare(b));
-    });
+    };
     await this.reloadConfig();
     this.editorExtension = helixExtension({
         editor: this.helix,
@@ -145,7 +132,15 @@ export default class HelixMotionsPlugin extends Plugin {
           this.syntaxSessions?.close(view);
         },
         physicalKeys: () => this.settings.physicalKeys,
+        statusBar: (view) => view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar"),
+        joinStatus: (view, joined) => {
+          const el = view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar .hx-status");
+          if (!el) return;
+          el.toggleClass("hx-status-joined", joined);
+          syncBar(el);
+        },
       });
+    this.editorExtension = [this.editorExtension, dropSelectionChange.of(isMarkupSnap)];
     this.registerEditorExtension(this.editorExtension);
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass("hx-status");
@@ -427,21 +422,11 @@ export default class HelixMotionsPlugin extends Plugin {
     void plugins?.getEnabledPluginById("word-count")?.onFileOpen?.();
   }
 
-  private uiSignature = "";
+  private refreshPanel: ((host: Host) => void) | null = null;
 
   refresh(host: Host): void {
-    const p = this.helix.activePrompt;
-    const auto = this.helix.autoinfo;
-    const sig = JSON.stringify([
-      p ? [p.label, p.line, p.cursor, p.selection, p.completions.length] : null,
-      auto ? ("kind" in auto ? auto.name : auto.title) : null,
-      this.helix.status,
-      this.helix.jumpLabels.get(host.id)?.length ?? 0,
-    ]);
-    if (sig !== this.uiSignature) {
-      this.uiSignature = sig;
-      host.view?.dispatch({});
-    }
+    this.refreshPanel ??= uiRefresher(this.helix);
+    this.refreshPanel(host);
     this.refreshStatus();
   }
 

@@ -1,9 +1,6 @@
 import { FileSystemAdapter, type MarkdownView } from "obsidian";
-import type { HelixEditor } from "../core/editor";
-import type { Host } from "../core/host";
-import { helixField } from "../state";
+import { type HelixEditor, helixField, type Host, nextGraphemeBoundary } from "helix-cm6";
 import { unresolvedIn } from "./workspace";
-import { nextGraphemeBoundary } from "../graphemes";
 
 type Part = { text: string; cls?: string };
 

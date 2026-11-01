@@ -10,15 +10,15 @@ Obsidian behaviour that is not documented and that this plugin works around. Fou
 
 ## Live Preview selection snap
 
-On a selection-only update, Live Preview moves selection ends that fall inside hidden markup (replace decorations from before the update). It does this in a later `setTimeout` dispatch with only `selection`: no `userEvent`, no `scrollIntoView`, no effects. This changes a Helix selection that was correct. `isMarkupSnap` in `src/state.ts` drops such a transaction outside insert mode when every range stays on its lines.
+On a selection-only update, Live Preview moves selection ends that fall inside hidden markup (replace decorations from before the update). It does this in a later `setTimeout` dispatch with only `selection`: no `userEvent`, no `scrollIntoView`, no effects. This changes a Helix selection that was correct. `isMarkupSnap` in `src/obsidian/selection-snap.ts` drops such a transaction outside insert mode when every range stays on its lines. It goes to helix-cm6 through its `dropSelectionChange` facet.
 
 ## List hanging indent
 
-After each update, Obsidian sets `text-indent` and `padding-inline-start` on list `.cm-line` elements in a `queueMicrotask`, and does not tell CodeMirror. A layout read that forces a CodeMirror measure before that microtask leaves a stale height map: `moveVertically` can then return the end of the document. Read layout after a dispatch in a microtask queued after it (`restoreVisualRows` in `src/movement.ts`).
+After each update, Obsidian sets `text-indent` and `padding-inline-start` on list `.cm-line` elements in a `queueMicrotask`, and does not tell CodeMirror. A layout read that forces a CodeMirror measure before that microtask leaves a stale height map: `moveVertically` can then return the end of the document. Read layout after a dispatch in a microtask queued after it (`restoreVisualRows` in helix-cm6's `src/movement.ts`).
 
 ## Revealed markup
 
-When the cursor enters a line, Live Preview shows its markup, and the line can wrap differently. Checkboxes, bullets, math and embeds are `contenteditable=false` widgets. `aimAt` in `src/movement.ts` hit-tests the goal column to find what was under it, and `restoreVisualRow` corrects the row after the rewrap.
+When the cursor enters a line, Live Preview shows its markup, and the line can wrap differently. Checkboxes, bullets, math and embeds are `contenteditable=false` widgets. `aimAt` in helix-cm6's `src/movement.ts` hit-tests the goal column to find what was under it, and `restoreVisualRow` corrects the row after the rewrap.
 
 ## Editor suggest
 

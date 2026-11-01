@@ -9,13 +9,7 @@ import {
   type WorkspaceLeaf,
 } from "obsidian";
 import type { EditorView } from "@codemirror/view";
-import type { Context, Workspace } from "../core/editor";
-import type { Jump } from "../commands/jumps";
-import { setSel, docOf, selOf } from "../commands/util";
-import { pushJump } from "../commands/jumps";
-import { gotoLineWithoutJumplist } from "../commands/motion";
-import { charAt, charBefore } from "../core/text";
-import { Range, Selection } from "../selection";
+import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, pushJump, Range, Selection, selOf, setSel, type Workspace } from "helix-cm6";
 
 interface PluginLike {
   app: App;
