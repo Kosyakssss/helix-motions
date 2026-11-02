@@ -319,6 +319,29 @@ const checks: Check[] = [
     },
   },
   {
+    name: "gd and C-w f on a heading link open the note at the heading; [[#heading]] jumps in the same note",
+    run: () => {
+      const where = () => evalJs<string>("JSON.stringify((()=>{const e=app.workspace.activeEditor; return e?.file && e.editor ? e.file.path + ':' + (e.editor.getCursor().line + 1) : ''})())");
+      const wait = (want: string) => {
+        for (let i = 0; i < 20 && where() !== want; i++) Bun.sleepSync(100);
+        return where();
+      };
+      setDoc("see [[Demonstration#Sun#[d|]#ay|the day]] here\n");
+      keys("gd");
+      expectEq("gd", wait("Demonstration.md:14"), "Demonstration.md:14");
+      keys("<C-o>");
+      expectEq("back", wait("scratch.md:1"), "scratch.md:1");
+      setDoc("see [[Demonstration#Sun#[d|]#ay]] here\n");
+      keys("<C-w>f");
+      expectEq("split", wait("Demonstration.md:14"), "Demonstration.md:14");
+      evalJs("JSON.stringify((app.workspace.getLeavesOfType('markdown').filter(l=>l.view.file?.path==='Demonstration.md').forEach(l=>l.detach()), true))");
+      evalJs("JSON.stringify((app.workspace.setActiveLeaf(app.workspace.getLeavesOfType('markdown').find(l=>l.view.file?.path==='scratch.md'),{focus:true}), true))");
+      setDoc("# Top\ntext\n## Far\nsee [[#F#[a|]#r]]\n");
+      keys("gd");
+      expectEq("same note", wait("scratch.md:3"), "scratch.md:3");
+    },
+  },
+  {
     name: "C-w v splits and C-w q closes",
     run: () => {
       setDoc("#[x|]#\n");
