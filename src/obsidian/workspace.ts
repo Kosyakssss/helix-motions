@@ -5,9 +5,16 @@ import {
   TFile,
   getLinkpath,
   normalizePath,
+  parseLinktext,
+  resolveSubpath,
   type App,
+  type BlockCache,
+  type CachedMetadata,
+  type HeadingCache,
+  type Pos,
   type WorkspaceLeaf,
 } from "obsidian";
+import type { Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
 import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, pushJump, Range, Selection, selOf, setSel, type Workspace } from "helix-cm6";
 
@@ -58,7 +65,7 @@ function linkUnderCursor(cx: Context): { kind: "wiki" | "md" | "url"; target: st
   const rel = pos - line.from;
   const text = line.text;
   const patterns: [RegExp, "wiki" | "md" | "url"][] = [
-    [/!?\[\[([^\]|#^]*)(?:[#^][^\]|]*)?(?:\|[^\]]*)?\]\]/g, "wiki"],
+    [/!?\[\[([^\]|]*)(?:\|[^\]]*)?\]\]/g, "wiki"],
     [/!?\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g, "md"],
     [/https?:\/\/[^\s<>()\]]+/g, "url"],
   ];
@@ -77,6 +84,43 @@ function linkUnderCursor(cx: Context): { kind: "wiki" | "md" | "url"; target: st
   const word = doc.sliceString(s, e);
   if (/^https?:\/\//.test(word)) return { kind: "url", target: word };
   return word ? { kind: "wiki", target: word } : null;
+}
+
+function liveCache(doc: Text): CachedMetadata {
+  const headings: HeadingCache[] = [];
+  const blocks: Record<string, BlockCache> = {};
+  const at = (line: number, from: number, to: number): Pos => ({
+    start: { line, col: 0, offset: from },
+    end: { line, col: to - from, offset: to },
+  });
+  let fence: string | null = null;
+  let start = 1;
+  if (doc.line(1).text === "---") {
+    for (let n = 2; n <= doc.lines; n++) {
+      if (/^(---|\.\.\.)\s*$/.test(doc.line(n).text)) {
+        start = n + 1;
+        break;
+      }
+    }
+  }
+  for (let n = start; n <= doc.lines; n++) {
+    const line = doc.line(n);
+    const text = line.text;
+    const open = /^\s{0,3}(`{3,}|~{3,})/.exec(text);
+    if (fence !== null) {
+      if (open && open[1]![0] === fence[0] && open[1]!.length >= fence.length && text.trim() === open[1]) fence = null;
+      continue;
+    }
+    if (open) {
+      fence = open[1]!;
+      continue;
+    }
+    const atx = /^\s{0,3}(#{1,6})\s+(.*?)(?:\s+#+)?\s*$/.exec(text);
+    if (atx) headings.push({ heading: atx[2]!, level: atx[1]!.length, position: at(n - 1, line.from, line.to) });
+    const block = /\s\^([A-Za-z0-9-]+)\s*$/.exec(text);
+    if (block) blocks[block[1]!.toLowerCase()] = { id: block[1]!, position: at(n - 1, line.from, line.to) };
+  }
+  return { headings, blocks };
 }
 
 interface Unresolved {
@@ -117,16 +161,24 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
   };
 
   const openTarget = async (cx: Context, target: string, mode: false | "split" | "tab", direction?: "vertical" | "horizontal") => {
-    const source = fileOf(cx)?.path ?? "";
+    const here = fileOf(cx);
+    const source = here?.path ?? "";
     if (/^[a-z]+:\/\//i.test(target)) {
       window.open(target);
       return;
     }
+    const { path, subpath } = parseLinktext(target);
+    const file = path ? app.metadataCache.getFirstLinkpathDest(path, source) : here;
     if (mode === "split") {
       const leaf = app.workspace.getLeaf("split", direction ?? "vertical");
-      const file = app.metadataCache.getFirstLinkpathDest(target, source);
-      if (file) await leaf.openFile(file);
+      if (file) await leaf.openFile(file, { active: true, eState: subpath ? { subpath } : undefined });
       else await app.workspace.openLinkText(target, source, false);
+      return;
+    }
+    if (!mode && subpath && here && file === here) {
+      const hit = resolveSubpath(liveCache(docOf(cx)), subpath);
+      if (hit) gotoLineWithoutJumplist(cx, hit.start.line + 1, "move");
+      else cx.editor.setError(`${subpath} not found`);
       return;
     }
     await app.workspace.openLinkText(target, source, mode === "tab");
@@ -344,7 +396,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
         const link = linkUnderCursor(cx);
         const source = fileOf(cx);
         const target =
-          (link && link.kind === "wiki" && source ? app.metadataCache.getFirstLinkpathDest(link.target, source.path) : null) ?? source;
+          (link && link.kind === "wiki" && source ? app.metadataCache.getFirstLinkpathDest(getLinkpath(link.target), source.path) : null) ?? source;
         if (!target) return;
         const items: Item[] = [];
         const resolved = app.metadataCache.resolvedLinks;
@@ -386,7 +438,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
       case "rename_symbol": {
         const link = linkUnderCursor(cx);
         const source = fileOf(cx);
-        const target = (link && source ? app.metadataCache.getFirstLinkpathDest(link.target, source.path) : null) ?? source;
+        const target = (link && source ? app.metadataCache.getFirstLinkpathDest(getLinkpath(link.target), source.path) : null) ?? source;
         if (!target) return;
         cx.editor.prompt(cx, {
           label: "rename-to:",
