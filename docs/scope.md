@@ -194,6 +194,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | Multiple cursors drawing | adapt | Cursors are cells one row tall, drawn in a layer above the text, like a terminal cell; a corner is round only where no selection touches it. The primary selection is the native one; other selections are full-row rectangles under the text, plus a CSS highlight where the text has an opaque background (code). |
 | Sticky `Z` mode, `auto-info` popup | adapt | Small which-key panel in the editor. |
 | Status line | adapt | One Obsidian status bar item. See config. |
+| Keys the keymap does not bind | adapt | In normal and select mode Helix takes every key. Here a Cmd key, or Ctrl with Home, End, Page Up or Page Down (Globe+Ctrl+arrow on macOS), that the keymap does not bind goes to Obsidian and macOS when no key is pending, so Obsidian hotkeys and window tiling work. A Cmd key that `helix.toml` binds, such as `Meta-z = "undo"`, runs the Helix command. |
 
 ## Text objects (`mi`, `ma`)
 
@@ -337,5 +338,5 @@ Known gaps:
 
 - `:tutor` shows "not available".
 - In insert mode, Live Preview shows markup only around the caret. Typing replaces a non-empty native selection, so the native selection must be a caret there.
-- `Cmd-Z` is Obsidian's own undo. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
+- `Cmd-Z` is Obsidian's own undo unless `helix.toml` binds `Meta-z`. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
 - On a 20,000-line note one key costs about one Obsidian transaction (~25 ms on an M1 Air).

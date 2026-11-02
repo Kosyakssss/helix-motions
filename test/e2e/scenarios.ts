@@ -517,16 +517,33 @@ const checks: Check[] = [
       evalJs(`JSON.stringify((app.setting.open(), app.setting.openTabById("helix-motions"), 1))`);
       Bun.sleepSync(500);
       try {
-        const result = evalJs<{ text: string; status: string | null; warnings: number }>(
-          `JSON.stringify((()=>{const p=app.plugins.plugins["helix-motions"]; const v=p.configView; const host=p.hostForView(v); p.helix.feedKeys(host, "ggx"); const sel=v.state.selection.main; const text=v.state.sliceDoc(sel.from, sel.to); p.helix.feedKeys(host, "<esc>:w<ret>"); return {text, status: null, warnings: p.configWarnings.length}})())`,
+        const result = evalJs<{ text: string; ranges: number; status: string | null; warnings: number }>(
+          `JSON.stringify((()=>{const p=app.plugins.plugins["helix-motions"]; const v=p.configView; const host=p.hostForView(v); p.helix.feedKeys(host, "ggx"); const sel=v.state.selection.main; const text=v.state.sliceDoc(sel.from, sel.to); p.helix.feedKeys(host, "C"); const ranges=v.state.selection.ranges.length; p.helix.feedKeys(host, ",<esc>:w<ret>"); return {text, ranges, status: null, warnings: p.configWarnings.length}})())`,
         );
         expectEq("x selects the first line", result.text, "[editor]\n");
+        expectEq("C adds a selection", result.ranges, 2);
         Bun.sleepSync(300);
         expectEq("saved", evalJs(`JSON.stringify(app.plugins.plugins["helix-motions"].helix.status?.message ?? null)`), "helix.toml saved");
       } finally {
         evalJs(`JSON.stringify((app.setting.close(), 1))`);
         openScratch();
       }
+    },
+  },
+  {
+    name: "unbound Ctrl with Home, End or Page goes to Obsidian and macOS in normal mode, Ctrl-k does not edit",
+    run: () => {
+      setDoc("#[h|]#ello world\n");
+      evalJs(`JSON.stringify((window.hxLastKey=null, window.hxKeyProbe||(window.hxKeyProbe=(e)=>{window.hxLastKey={key:e.key,prevented:e.defaultPrevented}}, window.addEventListener("keydown", window.hxKeyProbe)), 1))`);
+      for (const k of ["C-home", "C-S-pagedown", "C-end"]) {
+        sendDomKey(domKey(k));
+        const got = evalJs<{ prevented: boolean } | null>(`JSON.stringify(window.hxLastKey)`);
+        expectEq(`${k} not prevented`, got?.prevented, false);
+      }
+      expectEq("selection unchanged", state().markup, "#[h|]#ello world\n");
+      sendDomKey(domKey("C-k"));
+      expectEq("Ctrl-k changes nothing", state().markup, "#[h|]#ello world\n");
+      evalJs(`JSON.stringify((window.removeEventListener("keydown", window.hxKeyProbe), window.hxKeyProbe=null, 1))`);
     },
   },
   {
