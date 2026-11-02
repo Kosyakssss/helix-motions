@@ -35,7 +35,7 @@ A faithful port of Helix to Obsidian. The Helix engine is [helix-cm6](https://gi
 
 The community review must stay clean:
 
-- `bun run lint` (`eslint-plugin-obsidianmd`) passes.
+- `bun run lint` (`eslint-plugin-obsidianmd`) passes. It checks this repo and helix-cm6's `src`, because both ship in `main.js`. Only `prefer-create-el` is off for helix-cm6: `createEl` exists only in Obsidian, and helix-cm6 makes nodes with the editor's own `ownerDocument`.
 - No `:has` in CSS. Use `window.setTimeout` and `window.clearTimeout`. Use `Vault#configDir`, not `.obsidian`. No console logging. No Electron `require`; use `navigator.clipboard`.
 - The release `main.js` must rebuild byte for byte from the source. Releases have artifact attestations. Bun stays pinned in the workflows.
 

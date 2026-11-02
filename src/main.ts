@@ -61,12 +61,12 @@ export default class HelixMotionsPlugin extends Plugin {
         this.helix.syntax = (host) =>
           host.view && !this.isConfigView(host.view) ? sessions.get(host.view, host.state.doc) : null;
       })
-      .catch((err: unknown) => console.error("Helix: syntax tree unavailable", err));
+      .catch(() => new Notice("Helix: the syntax tree failed to load. Text objects and tree commands use plain text."));
     void loadRegex()
       .then((engine) => {
         this.helix.regex = engine;
       })
-      .catch((err: unknown) => console.error("Helix: regex engine unavailable", err));
+      .catch(() => new Notice("Helix: the regex engine failed to load. Search and select commands do not work."));
     this.helix.ui = {
       notify: () =>
         queueMicrotask(() => {

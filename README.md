@@ -68,6 +68,7 @@ Settings that Helix can't decide live in the settings tab: auto-pairs from Obsid
   - `regex.wasm`: Helix's regex engine (`regex-cursor` and `regex-automata`, the same versions as Helix) with a small binding.
 
   The end of `main.js` has their licenses.
+- **Source:** `main.js` is this repo plus helix-cm6 at the commit pinned in `package.json`. `bun install` and `bun run build` rebuild it byte for byte, and `bun run lint` checks both with `eslint-plugin-obsidianmd`.
 
 ## Credits
 

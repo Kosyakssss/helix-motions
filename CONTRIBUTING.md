@@ -13,7 +13,7 @@ bun install
 bun run build        # into test-vault/.obsidian/plugins/helix-motions
 bun run dev          # rebuild on change and reload the plugin
 bun run check        # TypeScript
-bun run lint         # Obsidian's review rules
+bun run lint         # Obsidian's review rules, on this repo and on helix-cm6
 ```
 
 Open `test-vault` in Obsidian to try changes. Its `helix.toml` is a real-world config.
