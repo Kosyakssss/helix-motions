@@ -9,7 +9,7 @@ import { releaseBar, renderStatus, syncBar } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
 import { DEFAULT_SETTINGS, HelixSettingTab, type Settings } from "./obsidian/settings";
 import { isMarkupSnap } from "./obsidian/selection-snap";
-import { afterKey, obsidianHooks } from "./obsidian/hooks";
+import { afterKey, focusedCell, obsidianHooks, tableOwner } from "./obsidian/hooks";
 
 export default class HelixMotionsPlugin extends Plugin {
   override settings: Settings = DEFAULT_SETTINGS;
@@ -53,6 +53,12 @@ export default class HelixMotionsPlugin extends Plugin {
     this.registerDomEvent(window, "focus", () => clipboard.refresh());
     this.registerDomEvent(document, "copy", () => window.setTimeout(() => clipboard.refresh(), 0));
     this.registerDomEvent(document, "cut", () => window.setTimeout(() => clipboard.refresh(), 0));
+    this.registerDomEvent(window, "mouseup", () => {
+      window.setTimeout(() => {
+        const view = this.activeView;
+        if (view?.dom.isConnected && view.hasFocus) view.dispatch({ selection: view.state.selection, annotations: helixOwned.of(true) });
+      }, 0);
+    });
     this.helix.workspace = makeWorkspace(this);
     this.helix.viewOps = makeViewOps(() => this.helix.config.scrolloff);
     this.helix.commentTokens = (host, pos) => commentTokensAt(host.state.doc, pos);
@@ -136,6 +142,8 @@ export default class HelixMotionsPlugin extends Plugin {
           this.syntaxSessions?.close(view);
         },
         physicalKeys: () => this.settings.physicalKeys,
+        panelOwner: (view) => tableOwner(view),
+        panelGuest: (view) => focusedCell(this, view),
         statusBar: (view) => view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar"),
         joinStatus: (view, joined) => {
           const el = view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar .hx-status");
@@ -431,6 +439,8 @@ export default class HelixMotionsPlugin extends Plugin {
   refresh(host: Host): void {
     this.refreshPanel ??= uiRefresher(this.helix);
     this.refreshPanel(host);
+    const owner = host.view ? tableOwner(host.view) : null;
+    if (owner) this.refreshPanel(this.hostForView(owner));
     this.refreshStatus();
   }
 

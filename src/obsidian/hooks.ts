@@ -28,6 +28,7 @@ interface TableWidget {
   deselectCells(): void;
   deleteSelection(direction: number): void;
   insertRow(row: number, col: number, copy: boolean): void;
+  insertColumn(row: number, col: number, alignment: unknown, copy: boolean): void;
   updateCell(cell: TableCell, text: string): unknown;
   dispatchTable(row?: number, col?: number): void;
   getTableString(bounds: { minRow: number; maxRow: number; minCol: number; maxCol: number }): string;
@@ -475,6 +476,16 @@ function enterTable(view: EditorView, table: TableWidget, edge: HelixEdge): bool
 
 export function obsidianHooks(plugin: HookPlugin): Extension {
   return helixHooks.of({
+    key(key, cx) {
+      if (key !== "A-o" && key !== "A-O") return false;
+      const active = activeCell(plugin, cx.host);
+      if (!active) return false;
+      const { table, cell } = active;
+      table.deselectCells();
+      table.insertColumn(cell.row, key === "A-o" ? cell.col + 1 : cell.col, table.alignments[cell.col], false);
+      enterInsertLater(plugin, table);
+      return true;
+    },
     stopBeforeEnd: (host) => activeCell(plugin, host) !== null,
     edge(edge, host) {
       const active = activeCell(plugin, host);
@@ -523,6 +534,18 @@ export function obsidianHooks(plugin: HookPlugin): Extension {
       return cm && cm !== host.view ? plugin.hostForView(cm) : null;
     },
   });
+}
+
+export function tableOwner(view: EditorView): EditorView | null {
+  const el = view.dom.parentElement?.closest(".cm-table-widget");
+  const tile = el as unknown as { cmTile?: { widget?: TableWidget } } | null | undefined;
+  return tile?.cmTile?.widget?.editor.cm ?? null;
+}
+
+export function focusedCell(plugin: HookPlugin, view: EditorView): EditorView | null {
+  const md = activeView(plugin.app);
+  const cell = md ? componentOf(md).tableCell : null;
+  return cell && cell.table.editor.cm === view ? cell.editor.cm : null;
 }
 
 export function afterKey(plugin: HookPlugin, view: EditorView): void {

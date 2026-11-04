@@ -1,5 +1,5 @@
 import { parseMacro } from "helix-cm6/engine";
-import { api, domKey, evalJs, ob, openScratch, sendDomKey, sendKeys, setDoc, state, type AppState } from "./obsidian";
+import { api, domKey, evalJs, mouse, ob, openScratch, sendDomKey, sendKeys, setDoc, state, type AppState } from "./obsidian";
 
 type Check = { name: string; run: () => void };
 const results: { name: string; ok: boolean; detail: string }[] = [];
@@ -162,6 +162,42 @@ function tableScenarios(): Check[] {
         expectEq("J", rows(), before);
         tableKeys("o");
         expectEq("a row more", rows(), before + 1);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: Alt-o and Alt-O add a column and enter insert mode",
+      run: () => {
+        inTable();
+        const columns = () => note().split("\n").find((l) => l.startsWith("|"))!.split("|").length;
+        const before = columns();
+        tableKeys("<A-o>");
+        expectEq("a column more", columns(), before + 1);
+        expectEq("in the new column", cell()?.[1], 1);
+        tableKeys("Y");
+        tableKeys("<esc>");
+        expectEq("typed in it", note().split("\n").find((l) => l.startsWith("|"))!.includes("Y"), true);
+        tableKeys("<A-O>");
+        expectEq("another column", columns(), before + 2);
+        expectEq("to the left", cell()?.[1], 1);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: messages, prompts and key help show in the note's panel, not in the cell",
+      run: () => {
+        inTable();
+        tableKeys(":echo hello<ret>");
+        const shown = () => evalJs<{ cell: number; main: string | null }>(`JSON.stringify((()=>{const v=app.workspace.activeLeaf.view.editor.cm;const widget=v.contentDOM.querySelector(".cm-table-widget");return {cell:widget.querySelectorAll(".hx-panel > :not(.hx-hidden)").length,main:[...v.dom.querySelectorAll(":scope > .cm-panels .hx-panel > :not(.hx-hidden)")].map(e=>e.textContent).join("|")}})())`);
+        expectEq("message", shown(), { cell: 0, main: "hello" });
+        expectEq("still in the cell", cell()?.slice(0, 2), [0, 0]);
+        tableKeys(":");
+        expectEq("prompt", shown().cell, 0);
+        expectEq("prompt in the note", shown().main?.includes(":"), true);
+        tableKeys("<esc>");
+        tableKeys("g");
+        expectEq("key help", shown().cell, 0);
+        expectEq("key help in the note", (shown().main ?? "").length > 0, true);
         tableKeys("<esc>");
       },
     },
@@ -773,6 +809,23 @@ const checks: Check[] = [
         got = dom(`const line = v.state.doc.line(4); const c = v.dom.querySelector(".hx-cursors .hx-cell").getBoundingClientRect(); const co = v.coordsAtPos(line.to, -1); return Math.abs(c.left - co.right) < 1.5`);
       }
       expectEq("cell at the line end", got, true);
+    },
+  },
+  {
+    name: "clicking away from a selection returns its lines to Live Preview",
+    run: () => {
+      setDoc("#[I|]#ntro\n\n- [ ] one\n- [ ] two\n\nAfter text\n");
+      Bun.sleepSync(400);
+      keys("jjmip");
+      Bun.sleepSync(400);
+      const raw = () => dom(`return v.contentDOM.querySelectorAll(".cm-formatting-task").length`) as number;
+      expectEq("revealed", raw(), 2);
+      const p = dom(`const c = v.coordsAtPos(v.state.doc.line(6).from + 3, 1); return [c.left + 1, (c.top + c.bottom) / 2]`) as [number, number];
+      mouse("mouseMoved", p[0], p[1]);
+      mouse("mousePressed", p[0], p[1]);
+      mouse("mouseReleased", p[0], p[1]);
+      Bun.sleepSync(400);
+      expectEq("hidden again", raw(), 0);
     },
   },
   {
