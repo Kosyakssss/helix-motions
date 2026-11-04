@@ -10,7 +10,7 @@ Needs Obsidian running with the `test-vault` vault open. The tests drive Obsidia
 
 - `bun run build` builds into the test vault's plugin folder; `bun run dev` rebuilds and reloads the plugin on change. `bun build.ts` alone builds into `dist/`.
 - `bun test/e2e/differential.ts words,code,...`: the Helix hand cases again, typed as real keys in Obsidian with the default config, and compared with the headless engine from helix-cm6. helix-cm6 checks the headless engine against Helix.
-- `bun test/e2e/scenarios.ts [name]`: Obsidian behaviour (Live Preview, Cmd shortcuts, Russian layout, lists, mouse, prompt, pickers, splits, scrolling, the example config).
+- `bun test/e2e/scenarios.ts [name]`: Obsidian behaviour (Live Preview, properties, embeds, tables, Cmd shortcuts, Russian layout, lists, mouse, prompt, pickers, splits, scrolling, the example config).
 - `bun test/e2e/visual.ts`: screenshots to `/tmp/hm-vis-*.png`.
 
 The tests use `scratch.md` and never touch another vault.

@@ -1,5 +1,5 @@
 import type { Text } from "@codemirror/state";
-import type { CommentTokens } from "helix-cm6";
+import type { CommentTokens } from "helix-cm6/engine";
 
 const SLASH = { line: ["//"], block: [{ start: "/*", end: "*/" }] };
 const HASH = { line: ["#"], block: null };

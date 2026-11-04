@@ -1,5 +1,5 @@
 import { Transaction } from "@codemirror/state";
-import { helixField } from "helix-cm6";
+import { helixField } from "helix-cm6/engine";
 
 export function isMarkupSnap(tr: Transaction): boolean {
   if (tr.docChanged || !tr.selection || tr.scrollIntoView || tr.effects.length > 0) return false;
@@ -11,6 +11,8 @@ export function isMarkupSnap(tr: Transaction): boolean {
   const doc = tr.startState.doc;
   return before.every((r, i) => {
     const n = after[i]!;
-    return doc.lineAt(r.anchor).number === doc.lineAt(n.anchor).number && doc.lineAt(r.head).number === doc.lineAt(n.head).number;
+    const line = doc.lineAt(r.anchor);
+    if (line.text.trimStart().startsWith("|")) return false;
+    return line.number === doc.lineAt(n.anchor).number && doc.lineAt(r.head).number === doc.lineAt(n.head).number;
   });
 }

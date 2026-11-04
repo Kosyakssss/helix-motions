@@ -16,7 +16,7 @@ import {
 } from "obsidian";
 import type { Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, pushJump, Range, Selection, selOf, setSel, type Workspace } from "helix-cm6";
+import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, pushJump, Range, Selection, selOf, setSel, type Workspace } from "helix-cm6/engine";
 
 interface PluginLike {
   app: App;

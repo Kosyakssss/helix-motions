@@ -1,5 +1,5 @@
 import { FileSystemAdapter, type MarkdownView } from "obsidian";
-import { type HelixEditor, helixField, type Host, nextGraphemeBoundary } from "helix-cm6";
+import { type HelixEditor, helixField, type Host, nextGraphemeBoundary } from "helix-cm6/engine";
 import { unresolvedIn } from "./workspace";
 
 type Part = { text: string; cls?: string };

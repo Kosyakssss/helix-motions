@@ -1,4 +1,4 @@
-import { parseMacro } from "helix-cm6";
+import { parseMacro } from "helix-cm6/engine";
 import { api, domKey, evalJs, ob, openScratch, sendDomKey, sendKeys, setDoc, state, type AppState } from "./obsidian";
 
 type Check = { name: string; run: () => void };
@@ -28,6 +28,169 @@ function consistent(s: AppState & { ranges: [number, number][] }): void {
 
 function dom(code: string): unknown {
   return evalJs(`JSON.stringify((()=>{const v=app.plugins.plugins["helix-motions"].api.view(); ${code}})())`);
+}
+
+
+function cursorLine(): number {
+  return dom(`const value = v.state.doc.lineAt(v.state.selection.main.anchor); return value.number`) as number;
+}
+
+function cell(): [number, number, string] | null {
+  return evalJs(`JSON.stringify((()=>{const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell;return c?[c.cell.row,c.cell.col,c.editor.cm.state.doc.toString()]:null})())`);
+}
+
+function cellsSelected(): number {
+  return evalJs(`JSON.stringify((()=>{const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell;return c?c.table.selectedCells.length:0})())`);
+}
+
+function note(): string {
+  return evalJs(`JSON.stringify(app.workspace.activeLeaf.view.editor.cm.state.doc.toString())`);
+}
+
+function tableKeys(k: string): void {
+  sendKeys(parseMacro(k));
+  Bun.sleepSync(250);
+}
+
+const TABLE = "#[a|]#bove\n\n| h1 | h2 | h3 |\n| -- | -- | -- |\n| a  | bb | c  |\n| d  | ee | f  |\n\nbelow\n";
+
+function inTable(): void {
+  setDoc(TABLE);
+  Bun.sleepSync(500);
+  tableKeys("jj");
+}
+
+function tableScenarios(): Check[] {
+  return [
+    {
+      name: "table: j from above enters the header, k from below enters the last row",
+      run: () => {
+        inTable();
+        expectEq("header", cell()?.slice(0, 2), [0, 0]);
+        tableKeys("3j");
+        expectEq("left below", cell(), null);
+        expectEq("line", cursorLine() > 6, true);
+        tableKeys("k");
+        expectEq("last row", cell()?.[0], 2);
+      },
+    },
+    {
+      name: "table: h and l cross cells but not past the row, and counts go across cells",
+      run: () => {
+        inTable();
+        tableKeys("h");
+        expectEq("stays at the first cell", cell()?.slice(0, 2), [0, 0]);
+        tableKeys("ll");
+        expectEq("second cell", cell()?.slice(0, 2), [0, 1]);
+        tableKeys("9l");
+        expectEq("clamped at the last cell", cell()?.slice(0, 2), [0, 2]);
+        tableKeys("9l");
+        expectEq("stays", cell()?.slice(0, 2), [0, 2]);
+        tableKeys("h");
+        tableKeys("h");
+        expectEq("back one cell", cell()?.[1], 1);
+      },
+    },
+    {
+      name: "table: j and k keep the column, and leave the table at its edges",
+      run: () => {
+        inTable();
+        tableKeys("l");
+        tableKeys("l");
+        tableKeys("j");
+        expectEq("row 1", cell()?.slice(0, 2), [1, 1]);
+        tableKeys("j");
+        expectEq("row 2", cell()?.slice(0, 2), [2, 1]);
+        tableKeys("j");
+        expectEq("out", cell(), null);
+        tableKeys("k");
+        tableKeys("3k");
+        expectEq("out above", cell(), null);
+      },
+    },
+    {
+      name: "table: typing in a cell edits the note, and u undoes it as one history",
+      run: () => {
+        inTable();
+        tableKeys("iZ");
+        tableKeys("<esc>");
+        expectEq("note changed", note().includes("Zh1"), true);
+        tableKeys("u");
+        expectEq("undone", note().includes("Zh1"), false);
+        tableKeys("U");
+        expectEq("redone", note().includes("Zh1"), true);
+      },
+    },
+    {
+      name: "table: x selects the row, j extends it, d removes it",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("x");
+        expectEq("one row", cellsSelected(), 3);
+        tableKeys("j");
+        expectEq("two rows", cellsSelected(), 6);
+        tableKeys("<esc>");
+        expectEq("back to one cell", cellsSelected(), 0);
+        tableKeys("x");
+        tableKeys("d");
+        expectEq("row gone", note().includes("| a"), true);
+        expectEq("row gone", note().includes("| d"), false);
+      },
+    },
+    {
+      name: "table: select mode extends past the cell into cells, y and p copy them as table text",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("v");
+        tableKeys("l");
+        expectEq("cells selected", cellsSelected() >= 2, true);
+        tableKeys("y");
+        const text = String(evalJs(`navigator.clipboard.readText().then(t=>JSON.stringify(t))`));
+        expectEq("table text", text.includes("|"), true);
+        tableKeys("<esc><esc>");
+      },
+    },
+    {
+      name: "table: o adds a row and enters insert mode, J does nothing",
+      run: () => {
+        inTable();
+        const rows = () => note().split("\n").filter((l) => l.startsWith("|")).length;
+        const before = rows();
+        tableKeys("J");
+        expectEq("J", rows(), before);
+        tableKeys("o");
+        expectEq("a row more", rows(), before + 1);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: gg and % from a cell act on the note",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("gg");
+        expectEq("left the table", cell(), null);
+        expectEq("first line", cursorLine(), 1);
+        tableKeys("jj");
+        tableKeys("%");
+        const s = state();
+        expectEq("whole note", s.ranges[0]?.[1], (s as unknown as { text: string }).text.length);
+        tableKeys(";");
+      },
+    },
+    {
+      name: "table: a macro replays across cells",
+      run: () => {
+        inTable();
+        tableKeys("QiX<esc>glllQ".replace("gl", ""));
+        expectEq("recorded", note().includes("Xh1"), true);
+        tableKeys("q");
+        expectEq("replayed in the next cell", note().includes("Xh2"), true);
+      },
+    },
+  ];
 }
 
 const checks: Check[] = [
@@ -480,12 +643,12 @@ const checks: Check[] = [
     },
   },
   {
-    name: "unsupported Helix commands report status instead of crashing",
+    name: "shell commands say there is no shell instead of crashing",
     run: () => {
       setDoc("#[x|]#\n");
-      keys("|");
+      keys("|ls<ret>");
       const s = state();
-      expectTrue("status set", !!s.status && /not available/.test(s.status.message), JSON.stringify(s.status));
+      expectTrue("status set", !!s.status && /No shell set/.test(s.status.message), JSON.stringify(s.status));
     },
   },
   {
@@ -596,6 +759,70 @@ const checks: Check[] = [
       }
     },
   },
+
+  {
+    name: "the cursor stays on the text when a list line reveals its markup",
+    run: () => {
+      const long = "- [ ] on a no-selection (so just one cell in normal mode), a for some reason draws a selection when beginning to write";
+      setDoc(`#[I|]#ntro\n\n- [ ] short\n${long}\n\nend\n`);
+      Bun.sleepSync(300);
+      keys("jjmip");
+      let got: unknown = false;
+      for (let i = 0; i < 30 && got !== true; i++) {
+        Bun.sleepSync(100);
+        got = dom(`const line = v.state.doc.line(4); const c = v.dom.querySelector(".hx-cursors .hx-cell").getBoundingClientRect(); const co = v.coordsAtPos(line.to, -1); return Math.abs(c.left - co.right) < 1.5`);
+      }
+      expectEq("cell at the line end", got, true);
+    },
+  },
+  {
+    name: "x then P on a last line with no newline pastes a whole line above",
+    run: () => {
+      setDoc("one\n#[t|]#wo");
+      keys("xyP");
+      expectEq("text", (state() as unknown as { text: string }).text, "one\ntwo\ntwo");
+    },
+  },
+  {
+    name: "p of a whole line after a last line with no newline adds a line",
+    run: () => {
+      setDoc("#[o|]#ne\ntwo");
+      keys("xyjp");
+      expectEq("text", (state() as unknown as { text: string }).text, "one\ntwo\none");
+    },
+  },
+  {
+    name: "Live Preview: motions skip frontmatter, gg goes to the first text line, k focuses the properties",
+    run: () => {
+      setDoc("---\nkey: value\n---\nfirst\n#[s|]#econd\n");
+      Bun.sleepSync(500);
+      expectEq("starts on second", cursorLine(), 5);
+      keys("k");
+      Bun.sleepSync(200);
+      expectEq("cursor on first", cursorLine(), 4);
+      keys("j");
+      keys("gg");
+      expectEq("gg", cursorLine(), 4);
+      keys("k");
+      Bun.sleepSync(150);
+      expectEq("properties have focus", evalJs(`app.workspace.activeLeaf.view.metadataEditor.hasFocus()`), true);
+      evalJs(`(app.workspace.activeLeaf.view.editor.cm.focus(), 1)`);
+    },
+  },
+  {
+    name: "Live Preview: j and k land on an embed line instead of skipping it",
+    run: () => {
+      setDoc("#[a|]#bove\n\n![[Welcome]]\n\nbelow\n");
+      Bun.sleepSync(700);
+      keys("jj");
+      expectEq("on the embed", cursorLine(), 3);
+      keys("jj");
+      expectEq("below", cursorLine(), 5);
+      keys("kk");
+      expectEq("back on the embed", cursorLine(), 3);
+    },
+  },
+  ...tableScenarios(),
 ];
 
 openScratch();

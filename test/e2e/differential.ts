@@ -1,6 +1,6 @@
 import { run } from "helix-cm6/test/harness";
 import { handSuite } from "helix-cm6/test/suites";
-import { parseMacro } from "helix-cm6";
+import { parseMacro } from "helix-cm6/engine";
 import { openScratch, sendKeys, setDoc, api, evalJs } from "./obsidian";
 
 interface S {

@@ -4,12 +4,11 @@ The engine plan is in helix-cm6's `docs/roadmap.md`. This file has the Obsidian 
 
 ## Known bugs
 
-- `{` and `}` bound in `helix.toml` do nothing.
-- Multiple cursors do not show in the `helix.toml` editor.
-- Globe+Ctrl+arrow window tiling and other macOS shortcuts do nothing while the editor is in normal or select mode.
-- Vertical motions skip `![[…]]` embeds in Live Preview.
+All fixed: `{` and `}`, multiple cursors in the `helix.toml` editor, Globe+Ctrl+arrow tiling, vertical motions that skipped `![[…]]` embeds, the cursor that drew in the wrong place when a list line revealed its markup, and `x` `y` `P` on a last line with no newline.
 
 ## Frontmatter and properties (Live Preview)
+
+Done, in `src/obsidian/hooks.ts`.
 
 - Motions skip the hidden frontmatter. In source mode they do not.
 - `gg` goes to the first visible line.
@@ -18,7 +17,7 @@ The engine plan is in helix-cm6's `docs/roadmap.md`. This file has the Obsidian 
 
 ## Tables (Live Preview)
 
-Source mode stays plain Helix.
+Done, in `src/obsidian/hooks.ts`, on the table widget's own API. Source mode stays plain Helix.
 
 - `h` and `l` at a cell edge move to the next cell, but not past the first or last cell of a row. `j` and `k` move to the cell above or below, in the same column, clamped. In a wrapped cell they move by visual rows first.
 - `gh`, `gl` and word motions stay in the cell.

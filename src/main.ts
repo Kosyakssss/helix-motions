@@ -1,7 +1,7 @@
 import { MarkdownView, Notice, Platform, type Editor, type EventRef, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { Extension, TransactionSpec } from "@codemirror/state";
-import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Context, defaultConfig, HelixEditor, helixExtension, helixField, helixOwned, type Host, loadConfig, loadRegex, loadSyntax, makeViewOps, plain, print, Registers, setHelix, type SyntaxSessions, SystemClipboard, toNative, uiRefresher } from "helix-cm6";
+import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Context, defaultConfig, HelixEditor, helixExtension, helixField, helixOwned, type Host, loadConfig, loadRegex, loadSyntax, makeViewOps, plain, print, Registers, setHelix, type SyntaxSessions, SystemClipboard, toNative, uiRefresher } from "helix-cm6/engine";
 import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
@@ -9,6 +9,7 @@ import { releaseBar, renderStatus, syncBar } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
 import { DEFAULT_SETTINGS, HelixSettingTab, type Settings } from "./obsidian/settings";
 import { isMarkupSnap } from "./obsidian/selection-snap";
+import { afterKey, obsidianHooks } from "./obsidian/hooks";
 
 export default class HelixMotionsPlugin extends Plugin {
   override settings: Settings = DEFAULT_SETTINGS;
@@ -45,6 +46,7 @@ export default class HelixMotionsPlugin extends Plugin {
     this.helix.visualLines = true;
     this.helix.continueLists = true;
     this.helix.helixAutoPairs = this.settings.autoPairs === "helix";
+    this.helix.finalLineIsLine = true;
     const clipboard = new SystemClipboard();
     clipboard.refresh();
     this.helix.registers = new Registers(clipboard);
@@ -57,6 +59,7 @@ export default class HelixMotionsPlugin extends Plugin {
     void loadSyntax(window)
       .then((sessions) => {
         this.syntaxSessions = sessions;
+        this.helix.languages = sessions.loader;
         for (const view of this.syntaxViews) if (!this.isConfigView(view)) sessions.open(view, view.state.doc);
         this.helix.syntax = (host) =>
           host.view && !this.isConfigView(host.view) ? sessions.get(host.view, host.state.doc) : null;
@@ -114,6 +117,7 @@ export default class HelixMotionsPlugin extends Plugin {
         },
         onRender: (view) => {
           if (view.state.field(helixField, false)?.mode !== "insert") this.openSuggest(view)?.close();
+          afterKey(this, view);
           if (view.hasFocus || this.activeView === view) {
             this.activeView = view;
             this.refreshStatus();
@@ -140,7 +144,7 @@ export default class HelixMotionsPlugin extends Plugin {
           syncBar(el);
         },
       });
-    this.editorExtension = [this.editorExtension, dropSelectionChange.of(isMarkupSnap)];
+    this.editorExtension = [this.editorExtension, dropSelectionChange.of(isMarkupSnap), obsidianHooks(this)];
     this.registerEditorExtension(this.editorExtension);
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass("hx-status");

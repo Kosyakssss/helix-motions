@@ -1,4 +1,4 @@
-import { parseKey } from "helix-cm6";
+import { parseKey } from "helix-cm6/engine";
 
 const VAULT = process.env.HM_VAULT ?? "test-vault";
 
@@ -150,6 +150,7 @@ export interface AppState {
   markup: string;
   mode: string;
   native: [number, number][];
+  ranges: [number, number][];
   nativeMain: number;
   status: { message: string; severity: string } | null;
   prompt: { label: string; line: string } | null;

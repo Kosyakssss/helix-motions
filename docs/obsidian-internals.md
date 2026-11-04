@@ -32,3 +32,17 @@ The core word-count plugin listens to `editor-selection-change` and counts `edit
 ## Files
 
 The vault API does not see files in the config folder, and the config folder is not always `.obsidian` (`Vault#configDir`). `helix.toml` lives in the vault root.
+
+## Tables
+
+A table in Live Preview is a block widget. `el.cmTile.widget` on `.cm-table-widget` has `rows`, `start`, `end`, `setCellFocus`, `placeCursorAround`, `selectCells`, `deleteSelection`, `insertRow`, `updateCell` and `dispatchTable`. The focused cell is `editor.editorComponent.tableCell`, with its own nested `EditorView` at `.editor.cm`, which runs its own copy of the Helix extension. A cell's view can be destroyed while a key is still being handled, so a key handler must not read its state afterwards.
+
+On any transaction in the main editor, the widget's `receiveSelection` refocuses the cell that holds the main selection, even if the transaction has no selection. So the main selection must leave the table before the main editor takes focus, and a selection change on a table line is not a markup snap. Moving focus to another cell during `keydown` lets Chromium deliver the key's character to the new cell, so the view layer swallows it.
+
+## Layout after a reveal
+
+When a list line reveals its markup, Obsidian writes the line's `text-indent` and padding after CodeMirror's measure read, in the same cycle, with no transaction. The cursor layers would keep the old position, so the view layer watches `style` on `.cm-line` and measures again.
+
+## Properties
+
+`metadataEditor.focus({ bottom: true })` focuses the Add property button, else the last property, or the heading when folded. Its own keys handle `j`, `k` and leaving to the note.

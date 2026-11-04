@@ -337,6 +337,7 @@ Steps 2 to 6 are implemented.
 Known gaps:
 
 - `:tutor` shows "not available".
+- Tables: a selection that starts outside the table is Obsidian's own, not per cell.
 - In insert mode, Live Preview shows markup only around the caret. Typing replaces a non-empty native selection, so the native selection must be a caret there.
 - `Cmd-Z` is Obsidian's own undo unless `helix.toml` binds `Meta-z`. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
 - On a 20,000-line note one key costs about one Obsidian transaction (~25 ms on an M1 Air).
