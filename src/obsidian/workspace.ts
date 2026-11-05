@@ -16,7 +16,7 @@ import {
 } from "obsidian";
 import type { Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, pushJump, Range, Selection, selOf, setSel, type Workspace } from "helix-cm6/engine";
+import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, pushJump, Range, Selection, selOf, setSel, type HelixApp } from "helix-cm6/engine";
 
 interface PluginLike {
   app: App;
@@ -149,7 +149,9 @@ async function openAt(app: App, file: TFile, from: number, to: number): Promise<
   editor.focus();
 }
 
-export function makeWorkspace(plugin: PluginLike): Workspace {
+export const HELIX_COMMANDS = new Set(["file_picker", "file_picker_in_current_buffer_directory", "file_explorer", "file_explorer_in_current_buffer_directory", "buffer_picker", "jumplist_picker", "last_picker", "symbol_picker", "workspace_symbol_picker", "command_palette", "code_action", "diagnostics_picker", "workspace_diagnostics_picker", "goto_first_diag", "goto_last_diag", "goto_next_diag", "goto_prev_diag", "global_search", "goto_file", "goto_definition", "goto_file_hsplit", "goto_file_vsplit", "goto_reference", "hover", "rename_symbol", "goto_last_accessed_file", "goto_last_modified_file", "goto_next_buffer", "goto_previous_buffer", "jump_view_left", "jump_view_right", "jump_view_up", "jump_view_down", "swap_view_left", "swap_view_right", "swap_view_up", "swap_view_down", "rotate_view", "rotate_view_reverse", "hsplit", "vsplit", "hsplit_new", "vsplit_new", "wclose", "quit", "wonly", "write", "write-all", "write-quit", "write-buffer-close", "write-quit-all", "quit-all", "buffer-close-all", "buffer-close", "buffer-close-others", "open", "new", "reload", "reload-all", "move", "read", "config-reload", "config-open", "tutor"]);
+
+export function makeWorkspace(plugin: PluginLike): HelixApp {
   const app = plugin.app;
   let lastPicker: (() => void) | null = null;
   const cmd = (id: string) => (app as unknown as { commands: { executeCommandById(id: string): boolean } }).commands.executeCommandById(id);
@@ -227,7 +229,7 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
     focusLeaf(next);
   };
 
-  const run = (cx: Context, name: string, args: string[]) => {
+  const run = (cx: Context, name: string, args: readonly string[]) => {
     const view = plugin.viewFor(cx.host);
     switch (name) {
       case "file_picker":
@@ -630,8 +632,22 @@ export function makeWorkspace(plugin: PluginLike): Workspace {
     }
   };
 
+  const commandList = () => (app as unknown as { commands: { commands: Record<string, { name: string }> } }).commands.commands;
+
   return {
-    run,
+    command(name) {
+      if (HELIX_COMMANDS.has(name)) return (cx, args) => run(cx, name, args);
+      if (!name.includes(":")) return null;
+      const found = commandList()[name];
+      if (!found) return null;
+      return {
+        doc: found.name,
+        run: (cx) => {
+          if (!cmd(name)) cx.editor.setStatus(`${found.name} is not available here`);
+        },
+      };
+    },
+    commandNames: () => Object.keys(commandList()),
     openJump: (cx: Context, jump: Jump) => {
       const file = app.vault.getAbstractFileByPath(jump.docId);
       const leaf = leafOf(cx);

@@ -1,7 +1,7 @@
 import { MarkdownView, Notice, Platform, type Editor, type EventRef, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { Extension, TransactionSpec } from "@codemirror/state";
-import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Context, defaultConfig, HelixEditor, helixExtension, helixField, helixOwned, type Host, loadConfig, loadRegex, loadSyntax, makeViewOps, plain, print, Registers, setHelix, type SyntaxSessions, SystemClipboard, toNative, uiRefresher } from "helix-cm6/engine";
+import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Context, defaultConfig, HelixEditor, helixAppKeys, helixExtension, helixField, helixOwned, type Host, type KeyLayer, loadConfig, loadRegex, loadSyntax, makeViewOps, plain, print, Registers, setHelix, type SyntaxSessions, SystemClipboard, toNative, uiRefresher } from "helix-cm6/engine";
 import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
@@ -9,7 +9,7 @@ import { releaseBar, renderStatus, syncBar } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
 import { DEFAULT_SETTINGS, HelixSettingTab, type Settings } from "./obsidian/settings";
 import { isMarkupSnap } from "./obsidian/selection-snap";
-import { afterKey, focusedCell, obsidianHooks, tableOwner } from "./obsidian/hooks";
+import { endTableCursors, afterKey, focusedCell, obsidianHooks, tableOwner } from "./obsidian/hooks";
 
 export default class HelixMotionsPlugin extends Plugin {
   override settings: Settings = DEFAULT_SETTINGS;
@@ -53,13 +53,14 @@ export default class HelixMotionsPlugin extends Plugin {
     this.registerDomEvent(window, "focus", () => clipboard.refresh());
     this.registerDomEvent(document, "copy", () => window.setTimeout(() => clipboard.refresh(), 0));
     this.registerDomEvent(document, "cut", () => window.setTimeout(() => clipboard.refresh(), 0));
+    this.registerDomEvent(window, "mousedown", () => endTableCursors());
     this.registerDomEvent(window, "mouseup", () => {
       window.setTimeout(() => {
         const view = this.activeView;
         if (view?.dom.isConnected && view.hasFocus) view.dispatch({ selection: view.state.selection, annotations: helixOwned.of(true) });
       }, 0);
     });
-    this.helix.workspace = makeWorkspace(this);
+    this.helix.app = makeWorkspace(this);
     this.helix.viewOps = makeViewOps(() => this.helix.config.scrolloff);
     this.helix.commentTokens = (host, pos) => commentTokensAt(host.state.doc, pos);
     void loadSyntax(window)
@@ -256,7 +257,7 @@ export default class HelixMotionsPlugin extends Plugin {
       else {
         const loaded = loadConfig(source, this.baseConfig());
         this.helix.config = loaded.config;
-        this.helix.keymaps = buildKeymaps(loaded.keys);
+        this.helix.keymaps = this.keymapsFor(loaded.keys);
         this.applyViewConfig();
         this.refreshStatus();
       }
@@ -321,12 +322,16 @@ export default class HelixMotionsPlugin extends Plugin {
     setting?.openTabById(this.manifest.id);
   }
 
+  keymapsFor(keys: KeyLayer): HelixEditor["keymaps"] {
+    return buildKeymaps(keys, { app: helixAppKeys, available: (name) => this.helix.hasCommand(name) });
+  }
+
   async reloadConfig(): Promise<void> {
     const source = await this.readConfigSource();
     const loaded = loadConfig(source, this.baseConfig());
     const changed = loaded.warnings.join("\n") !== this.configWarnings.join("\n");
     this.helix.config = loaded.config;
-    this.helix.keymaps = buildKeymaps(loaded.keys);
+    this.helix.keymaps = this.keymapsFor(loaded.keys);
     this.configWarnings = loaded.warnings;
     this.settingTab?.showWarnings();
     if (changed && loaded.warnings.length > 0) {

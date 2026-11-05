@@ -92,6 +92,58 @@ function tableScenarios(): Check[] {
       },
     },
     {
+      name: "table: h lands on the last letter of the cell to the left, j and k keep the letter",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("l");
+        expectEq("next cell", cell()?.slice(0, 2), [1, 1]);
+        const head = () => evalJs<number>(`JSON.stringify(app.workspace.activeLeaf.view.editor.editorComponent.tableCell.editor.cm.state.selection.main.head)`);
+        tableKeys("l");
+        expectEq("second letter", head(), 2);
+        tableKeys("k");
+        expectEq("same letter above", head(), 2);
+        tableKeys("gh");
+        tableKeys("h");
+        expectEq("left cell", cell()?.slice(0, 2), [0, 0]);
+        expectEq("last letter", head(), 2);
+      },
+    },
+    {
+      name: "table: moving between cells does not shift the layout, and a selection in a cell is visible",
+      run: () => {
+        setDoc(TABLE);
+        Bun.sleepSync(500);
+        const height = () => evalJs<number>(`JSON.stringify(document.querySelector(".cm-table-widget").getBoundingClientRect().height)`);
+        const before = height();
+        tableKeys("jj");
+        expectEq("entering the table", height(), before);
+        tableKeys("l");
+        tableKeys("j");
+        expectEq("moving in the table", height(), before);
+        tableKeys("mi|");
+        const shown = evalJs<string>(`JSON.stringify(getComputedStyle(app.workspace.activeLeaf.view.editor.editorComponent.tableCell.editor.cm.dom.querySelector(".cm-line"), "::selection").backgroundColor)`);
+        expectEq("selection colour", shown !== "rgba(0, 0, 0, 0)" && shown !== "transparent", true);
+      },
+    },
+    {
+      name: "table: with several cursors, e stays in each cell and the cursors stay apart",
+      run: () => {
+        inTable();
+        tableKeys("C");
+        tableKeys("e");
+        tableKeys("e");
+        tableKeys("e");
+        const parts = () => evalJs<number>(`JSON.stringify(document.querySelectorAll(".hx-cell-part-head").length)`);
+        expectEq("still a cursor in the other cell", parts(), 1);
+        expectEq("focus stays", cell()?.slice(0, 2), [0, 0]);
+        tableKeys("iZ<esc>");
+        expectEq("first", note().includes("h1"), true);
+        expectEq("second row got the text", note().split("\n")[4]!.includes("Z"), true);
+        tableKeys(",");
+      },
+    },
+    {
       name: "table: j and k keep the column, and leave the table at its edges",
       run: () => {
         inTable();
@@ -122,13 +174,13 @@ function tableScenarios(): Check[] {
       },
     },
     {
-      name: "table: x selects the row, j extends it, d removes it",
+      name: "table: x selects the row, x extends it, d removes it",
       run: () => {
         inTable();
         tableKeys("j");
         tableKeys("x");
         expectEq("one row", cellsSelected(), 3);
-        tableKeys("j");
+        tableKeys("x");
         expectEq("two rows", cellsSelected(), 6);
         tableKeys("<esc>");
         expectEq("back to one cell", cellsSelected(), 0);
@@ -145,7 +197,8 @@ function tableScenarios(): Check[] {
         tableKeys("j");
         tableKeys("v");
         tableKeys("l");
-        expectEq("cells selected", cellsSelected() >= 2, true);
+        tableKeys("l");
+        expectEq("cells selected", cellsSelected(), 2);
         tableKeys("y");
         const text = String(evalJs(`navigator.clipboard.readText().then(t=>JSON.stringify(t))`));
         expectEq("table text", text.includes("|"), true);
@@ -166,21 +219,144 @@ function tableScenarios(): Check[] {
       },
     },
     {
-      name: "table: Alt-o and Alt-O add a column and enter insert mode",
+      name: "table: Alt-o is not bound, and an Obsidian command bound in helix.toml adds a column",
       run: () => {
         inTable();
         const columns = () => note().split("\n").find((l) => l.startsWith("|"))!.split("|").length;
         const before = columns();
         tableKeys("<A-o>");
+        expectEq("Alt-o does nothing", columns(), before);
+        evalJs(`JSON.stringify(app.commands.executeCommandById("editor:table-col-after"))`);
+        Bun.sleepSync(250);
         expectEq("a column more", columns(), before + 1);
-        expectEq("in the new column", cell()?.[1], 1);
-        tableKeys("Y");
+      },
+    },
+    {
+      name: "table: mi| selects the cell text, ma| selects the cell, mip selects the table",
+      run: () => {
+        inTable();
+        tableKeys("mi|");
+        expectEq("no cell selection", cellsSelected(), 0);
+        tableKeys("d");
+        expectEq("text gone", note().includes("h1"), false);
+        tableKeys("u");
+        tableKeys("ma|");
+        expectEq("one cell", cellsSelected(), 1);
+        tableKeys(";");
+        expectEq("back to text", cellsSelected(), 0);
+        tableKeys("mip");
+        expectEq("whole table", cellsSelected(), 9);
+        tableKeys("d");
+        expectEq("table gone", note().includes("|"), false);
+        tableKeys("u");
+      },
+    },
+    {
+      name: "table: select mode past the text selects this cell, then neighbours, and motions work on cells",
+      run: () => {
+        inTable();
+        tableKeys("v");
+        tableKeys("gl");
+        expectEq("still text", cellsSelected(), 0);
+        tableKeys("l");
+        expectEq("this cell", cellsSelected(), 1);
+        tableKeys("l");
+        expectEq("two cells", cellsSelected(), 2);
+        tableKeys("j");
+        expectEq("a block", cellsSelected(), 4);
         tableKeys("<esc>");
-        expectEq("typed in it", note().split("\n").find((l) => l.startsWith("|"))!.includes("Y"), true);
-        tableKeys("<A-O>");
-        expectEq("another column", columns(), before + 2);
-        expectEq("to the left", cell()?.[1], 1);
+        expectEq("normal mode keeps the cells", cellsSelected(), 4);
+        tableKeys("l");
+        expectEq("a normal motion moves one cell", cellsSelected(), 1);
         tableKeys("<esc>");
+        expectEq("esc goes back to text", cellsSelected(), 0);
+      },
+    },
+    {
+      name: "table: x selects rows, x again adds a row, and e and b walk through cells",
+      run: () => {
+        inTable();
+        tableKeys("x");
+        expectEq("one row", cellsSelected(), 3);
+        tableKeys("x");
+        expectEq("two rows", cellsSelected(), 6);
+        tableKeys("<esc>");
+        tableKeys("e");
+        tableKeys("e");
+        expectEq("next cell", cell()?.[1], 1);
+        tableKeys("b");
+        expectEq("previous cell", cell()?.[1], 0);
+      },
+    },
+    {
+      name: "table: C adds a cursor in the row below, typing edits both cells",
+      run: () => {
+        inTable();
+        tableKeys("C");
+        expectEq("drawn in the other cell", evalJs(`JSON.stringify(document.querySelectorAll(".hx-cell-part-head").length)`), 1);
+        tableKeys("iZ");
+        tableKeys("<esc>");
+        expectEq("first cell", note().includes("Zh1"), true);
+        expectEq("second cell", note().includes("Za"), true);
+        tableKeys(",");
+        expectEq("back to one cursor", evalJs(`JSON.stringify(document.querySelectorAll(".hx-cell-part-head").length)`), 0);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: C then j moves both cursors, and mi| selects text in each",
+      run: () => {
+        inTable();
+        tableKeys("C");
+        tableKeys("mi|");
+        tableKeys("d");
+        expectEq("both emptied", [note().includes("h1"), note().includes("| a ")], [false, false]);
+        tableKeys("u");
+        tableKeys(",");
+      },
+    },
+    {
+      name: "table: a block of cells, i types in all of them",
+      run: () => {
+        inTable();
+        tableKeys("v");
+        tableKeys("gll");
+        tableKeys("j");
+        tableKeys("<esc>");
+        expectEq("two cells", cellsSelected(), 2);
+        tableKeys("c");
+        Bun.sleepSync(250);
+        tableKeys("Q");
+        tableKeys("<esc>");
+        expectEq("both changed", note().split("\n").filter((l) => l.startsWith("| Q")).length, 2);
+        tableKeys(",");
+      },
+    },
+    {
+      name: "table: select mode from above runs over rows, and a selection from outside marks them",
+      run: () => {
+        setDoc(TABLE);
+        Bun.sleepSync(500);
+        tableKeys("v");
+        tableKeys("j");
+        tableKeys("j");
+        expectEq("not in a cell", cell(), null);
+        expectEq("marked", (evalJs(`JSON.stringify(document.querySelectorAll(".hx-row-selected").length)`) as number) >= 3, true);
+        tableKeys("<esc>;");
+      },
+    },
+    {
+      name: "helix.toml binds an Obsidian command by its id",
+      run: () => {
+        setDoc("#[a|]#bc\n");
+        Bun.sleepSync(300);
+        const helix = `app.plugins.plugins["helix-motions"]`;
+        evalJs(`JSON.stringify((()=>{const p=${helix};const h=p.helix;h.keymaps=p.keymapsFor({normal:{name:"",map:{"X":"editor:toggle-bold"}}});return 1})())`);
+        tableKeys("X");
+        Bun.sleepSync(250);
+        expectEq("ran", note().includes("**"), true);
+        evalJs(`JSON.stringify((()=>{const p=${helix};p.reloadConfig();return 1})())`);
+        Bun.sleepSync(250);
       },
     },
     {

@@ -18,7 +18,7 @@
     "eslint": "^10.13.0",
     "eslint-import-resolver-node": "^0.4.0",
     "eslint-plugin-obsidianmd": "^0.4.2",
-    "helix-cm6": "github:Kosyakssss/helix-cm6#c7e41c3eb4626f35aad65874371a79b9eaf41858",
+    "helix-cm6": "github:Kosyakssss/helix-cm6#df7fa9ad4158c5b9016f37f5d7cb14251d93f1f3",
     "obsidian": "^1.14.4",
     "smol-toml": "^1.9.1",
     "typescript": "^7",

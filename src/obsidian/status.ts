@@ -1,5 +1,6 @@
 import { FileSystemAdapter, type MarkdownView } from "obsidian";
 import { type HelixEditor, helixField, type Host, nextGraphemeBoundary } from "helix-cm6/engine";
+import { tableCursorCount } from "./hooks";
 import { unresolvedIn } from "./workspace";
 
 type Part = { text: string; cls?: string };
@@ -56,6 +57,8 @@ function element(name: string, editor: HelixEditor, host: Host, view: MarkdownVi
     case "workspace-diagnostics":
       return view ? severityCounts(sl.workspaceDiagnostics, vaultWarnings(view), [{ text: " W " }]) : [];
     case "selections": {
+      const cells = tableCursorCount();
+      if (cells !== null) return [{ text: ` ${cells} sels ` }];
       const n = value.selection.ranges.length;
       return [{ text: n === 1 ? " 1 sel " : ` ${value.selection.primaryIndex + 1}/${n} sels ` }];
     }

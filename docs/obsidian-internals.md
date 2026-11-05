@@ -39,6 +39,8 @@ A table in Live Preview is a block widget. `el.cmTile.widget` on `.cm-table-widg
 
 On any transaction in the main editor, the widget's `receiveSelection` refocuses the cell that holds the main selection, even if the transaction has no selection. So the main selection must leave the table before the main editor takes focus, and a selection change on a table line is not a markup snap. Moving focus to another cell during `keydown` lets Chromium deliver the key's character to the new cell, so the view layer swallows it.
 
+`selectCells(anchor, head)` ignores `anchor === head`. For a one-cell selection, pass an object made with `Object.create(cell)` as the anchor: bounds read only its `row` and `col`. `deleteSelection` removes whole rows, columns or the table, and clears anything else. Only the focused cell has an editor, and the others show rendered text, so cursors in several cells run in a headless Helix host with one line per cell (`src/obsidian/table-cursors.ts`), and each change is written with `updateCell` and `dispatchTable`.
+
 ## Layout after a reveal
 
 When a list line reveals its markup, Obsidian writes the line's `text-indent` and padding after CodeMirror's measure read, in the same cycle, with no transaction. The cursor layers would keep the old position, so the view layer watches `style` on `.cm-line` and measures again.

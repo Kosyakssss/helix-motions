@@ -1,12 +1,19 @@
 import { editorLivePreviewField, MarkdownView, type App } from "obsidian";
 import { EditorSelection, type Extension } from "@codemirror/state";
-import type { EditorView } from "@codemirror/view";
-import { commitHistoryNow, Context, type HelixEdge, type HelixEditor, helixField, helixHooks, type Host, type MotionRange, pasteImpl, pushJump, selOf, setSel } from "helix-cm6/engine";
+import { EditorView } from "@codemirror/view";
+import { commitHistoryNow, Context, type HelixEdge, type HelixEditor, helixField, helixHooks, type Host, type MotionRange, pasteImpl, pushJump, Range, Selection, selOf, setSel } from "helix-cm6/engine";
+import { whileMovingToCell } from "./selection-snap";
+import { CellCursors, type CursorEnv } from "./table-cursors";
+
+let tableCursors: CellCursors | null = null;
+let walking = false;
 
 interface TableCell {
   row: number;
   col: number;
   text: string;
+  el: HTMLElement;
+  contentEl?: HTMLElement;
   getAbsoluteOffsets(): { textStart: number; textEnd: number };
 }
 
@@ -21,11 +28,12 @@ interface TableWidget {
   editor: { cm: EditorView };
   containerEl: HTMLElement;
   getCellAt(row: number, col: number): TableCell | null;
-  setCellFocus(row: number, col: number, selection?: (cm: EditorView) => EditorSelection): void;
+  setCellFocus(row: number, col: number, selection?: (cm: EditorView) => EditorSelection): unknown;
   placeCursorAround(where: "before" | "after"): void;
   placeCursorInCell(cell: TableCell, where: "start" | "end" | "last-line"): void;
   selectCells(anchor: TableCell, head: TableCell): void;
   deselectCells(): void;
+  rerenderCell?(cell: TableCell): void;
   deleteSelection(direction: number): void;
   insertRow(row: number, col: number, copy: boolean): void;
   insertColumn(row: number, col: number, alignment: unknown, copy: boolean): void;
@@ -150,11 +158,13 @@ function clampedOffset(cm: EditorView, column: number): EditorSelection {
 }
 
 function moveToCell(table: TableWidget, row: number, col: number, offset: number | "start" | "last"): void {
-  table.setCellFocus(row, col, (cm) => {
-    if (offset === "start") return EditorSelection.single(0);
-    if (offset === "last") return clampedOffset(cm, cm.state.doc.length);
-    return clampedOffset(cm, offset);
-  });
+  whileMovingToCell(() =>
+    table.setCellFocus(row, col, (cm) => {
+      if (offset === "start") return EditorSelection.single(0);
+      if (offset === "last") return clampedOffset(cm, cm.state.doc.length);
+      return clampedOffset(cm, offset);
+    }),
+  );
 }
 
 function selectionCursor(table: TableWidget): { row: number; col: number } | null {
@@ -162,14 +172,41 @@ function selectionCursor(table: TableWidget): { row: number; col: number } | nul
   return head ? { row: head.row, col: head.col } : null;
 }
 
-function moveSelectionHead(table: TableWidget, rowDelta: number, colDelta: number): void {
+function selectRect(table: TableWidget, anchor: TableCell, head: TableCell): void {
+  table.selectCells(anchor.row === head.row && anchor.col === head.col ? (Object.create(head) as TableCell) : anchor, head);
+}
+
+function moveSelectionHead(table: TableWidget, rowDelta: number, colDelta: number, extend: boolean): void {
   const anchor = table.selectionAnchor;
   const head = table.selectionHead;
   if (!anchor || !head) return;
   const row = Math.max(0, Math.min(table.rows.length - 1, head.row + rowDelta));
   const col = Math.max(0, Math.min(table.alignments.length - 1, head.col + colDelta));
   const next = table.getCellAt(row, Math.min(col, table.rows[row]!.length - 1));
-  if (next) table.selectCells(anchor, next);
+  if (next) selectRect(table, extend ? anchor : next, next);
+}
+
+function selectRows(table: TableWidget, fromRow: number, toRow: number): void {
+  const first = table.rows[fromRow]!;
+  const last = table.rows[toRow]!;
+  selectRect(table, first[0]!, last[last.length - 1]!);
+}
+
+function selectWholeTable(table: TableWidget): void {
+  selectRows(table, 0, table.rows.length - 1);
+}
+
+function cellsIn(table: TableWidget): TableCell[] {
+  const bounds = table.getSelectionBounds();
+  if (!bounds) return [];
+  const out: TableCell[] = [];
+  for (let row = bounds.minRow; row <= bounds.maxRow; row++) {
+    for (let col = bounds.minCol; col <= bounds.maxCol; col++) {
+      const cell = table.getCellAt(row, col);
+      if (cell) out.push(cell);
+    }
+  }
+  return out;
 }
 
 function parseTable(text: string): { rows: string[][]; alignment: string[] } | null {
@@ -181,54 +218,70 @@ function parseTable(text: string): { rows: string[][]; alignment: string[] } | n
   return { rows, alignment: rows[0]!.map(() => "left") };
 }
 
+const LEFT_MOTIONS = new Set(["char_left", "prev_word_start", "prev_word_end", "prev_long_word_start", "prev_long_word_end", "prev_sub_word_start", "prev_sub_word_end"]);
+const RIGHT_MOTIONS = new Set(["char_right", "next_word_start", "next_word_end", "next_long_word_start", "next_long_word_end", "next_sub_word_start", "next_sub_word_end"]);
+const UP_MOTIONS = new Set(["visual_line_up", "line_up"]);
+const DOWN_MOTIONS = new Set(["visual_line_down", "line_down"]);
+const WORD_MOTIONS = new Set([...LEFT_MOTIONS, ...RIGHT_MOTIONS].filter((m) => m.includes("word")));
+
 function cellSelectionCommand(plugin: HookPlugin, name: string, cx: Context, active: ActiveCell): boolean {
   const { table } = active;
   const count = cx.count();
+  const motion = /^(move|extend)_(.+)$/.exec(name);
+  if (motion) {
+    const extend = motion[1] === "extend";
+    if (LEFT_MOTIONS.has(motion[2]!)) return moveSelectionHead(table, 0, -count, extend), true;
+    if (RIGHT_MOTIONS.has(motion[2]!)) return moveSelectionHead(table, 0, count, extend), true;
+    if (UP_MOTIONS.has(motion[2]!)) return moveSelectionHead(table, -count, 0, extend), true;
+    if (DOWN_MOTIONS.has(motion[2]!)) return moveSelectionHead(table, count, 0, extend), true;
+  }
+  const bounds = table.getSelectionBounds();
   switch (name) {
-    case "move_char_left":
-    case "extend_char_left":
-      moveSelectionHead(table, 0, -count);
-      return true;
-    case "move_char_right":
-    case "extend_char_right":
-      moveSelectionHead(table, 0, count);
-      return true;
-    case "move_visual_line_up":
-    case "extend_visual_line_up":
-    case "move_line_up":
-    case "extend_line_up":
-      moveSelectionHead(table, -count, 0);
-      return true;
-    case "move_visual_line_down":
-    case "extend_visual_line_down":
-    case "move_line_down":
-    case "extend_line_down":
-      moveSelectionHead(table, count, 0);
-      return true;
-    case "goto_file_start":
     case "extend_to_file_start":
-      moveSelectionHead(table, -table.rows.length, 0);
+      moveSelectionHead(table, -table.rows.length, 0, true);
       return true;
-    case "goto_last_line":
     case "extend_to_last_line":
-      moveSelectionHead(table, table.rows.length, 0);
+    case "extend_to_file_end":
+      moveSelectionHead(table, table.rows.length, 0, true);
       return true;
     case "goto_line_start":
+    case "goto_first_nonwhitespace":
+      moveSelectionHead(table, 0, -table.alignments.length, false);
+      return true;
     case "extend_to_line_start":
-      moveSelectionHead(table, 0, -table.alignments.length);
+    case "extend_to_first_nonwhitespace":
+      moveSelectionHead(table, 0, -table.alignments.length, true);
       return true;
     case "goto_line_end":
+      moveSelectionHead(table, 0, table.alignments.length, false);
+      return true;
     case "extend_to_line_end":
-      moveSelectionHead(table, 0, table.alignments.length);
+      moveSelectionHead(table, 0, table.alignments.length, true);
       return true;
     case "extend_line":
-    case "extend_line_below": {
-      moveSelectionHead(table, count, 0);
+    case "extend_line_below":
+    case "select_line_below":
+      if (!bounds) return true;
+      if (bounds.minCol === 0 && bounds.maxCol === table.alignments.length - 1) selectRows(table, bounds.minRow, Math.min(bounds.maxRow + count, table.rows.length - 1));
+      else selectRows(table, bounds.minRow, bounds.maxRow);
       return true;
-    }
+    case "extend_line_above":
+    case "select_line_above":
+      if (!bounds) return true;
+      if (bounds.minCol === 0 && bounds.maxCol === table.alignments.length - 1) selectRows(table, Math.max(bounds.minRow - count, 0), bounds.maxRow);
+      else selectRows(table, bounds.minRow, bounds.maxRow);
+      return true;
+    case "copy_selection_on_next_line":
+      moveSelectionHead(table, count, 0, true);
+      return true;
+    case "copy_selection_on_prev_line":
+      moveSelectionHead(table, -count, 0, true);
+      return true;
+    case "exit_select_mode":
+      return false;
     case "collapse_selection":
-    case "normal_mode":
-    case "exit_select_mode": {
+    case "keep_primary_selection":
+    case "normal_mode": {
       const at = selectionCursor(table);
       table.deselectCells();
       if (at) moveToCell(table, at.row, at.col, "last");
@@ -242,13 +295,13 @@ function cellSelectionCommand(plugin: HookPlugin, name: string, cx: Context, act
     case "change_selection":
     case "change_selection_noyank": {
       if (name === "change_selection") yankCells(plugin, cx, table);
-      const bounds = table.getSelectionBounds();
-      const cells = table.selectedCells;
-      if (!bounds) return true;
+      const cells = cellsIn(table);
       for (const cell of cells) table.updateCell(cell, "");
+      const first = cells[0];
       table.deselectCells();
-      table.dispatchTable(bounds.minRow, bounds.minCol);
-      enterInsertLater(plugin, table);
+      if (!first) return true;
+      table.dispatchTable(first.row, first.col);
+      startCursorsLater(plugin, table, cells, "insert_mode");
       return true;
     }
     case "yank":
@@ -277,22 +330,13 @@ function cellSelectionCommand(plugin: HookPlugin, name: string, cx: Context, act
     case "switch_to_uppercase":
       perCell(table, (text) => text.toUpperCase());
       return true;
-    case "insert_mode": {
-      const bounds = table.getSelectionBounds();
-      table.deselectCells();
-      if (bounds) {
-        moveToCell(table, bounds.minRow, bounds.minCol, "start");
-        enterInsertLater(plugin, table, "insert_mode");
-      }
-      return true;
-    }
+    case "insert_mode":
     case "append_mode": {
-      const bounds = table.getSelectionBounds();
+      const cells = cellsIn(table);
+      const first = cells[0];
       table.deselectCells();
-      if (bounds) {
-        moveToCell(table, bounds.maxRow, bounds.maxCol, "last");
-        enterInsertLater(plugin, table, "append_mode");
-      }
+      if (first) moveToCell(table, first.row, first.col, name === "insert_mode" ? "start" : "last");
+      startCursorsLater(plugin, table, cells, name);
       return true;
     }
     default:
@@ -340,6 +384,35 @@ function enterInsertLater(plugin: HookPlugin, table: TableWidget, command = "ins
   }, 0);
 }
 
+function startCursorsLater(plugin: HookPlugin, table: TableWidget, cells: readonly TableCell[], command: "insert_mode" | "append_mode"): void {
+  const places = cells.map((cell) => ({ row: cell.row, col: cell.col }));
+  window.setTimeout(() => {
+    const md = activeView(plugin.app);
+    const active = md ? componentOf(md).tableCell : null;
+    if (!active) return;
+    if (places.length < 2) {
+      plugin.helix.runStatic(new Context(plugin.helix, plugin.hostForView(active.editor.cm), null, null), command);
+      return;
+    }
+    tableCursors = new CellCursors(cursorEnv(plugin), places, (text) => [command === "insert_mode" ? new Range(0, Math.min(1, text.length)) : new Range(Math.max(text.length - 1, 0), text.length)], command);
+  }, 0);
+}
+
+function cursorEnv(plugin: HookPlugin): CursorEnv {
+  return {
+    helix: plugin.helix,
+    active: () => {
+      const md = activeView(plugin.app);
+      return md ? (componentOf(md).tableCell ?? null) : null;
+    },
+    hostFor: (view) => plugin.hostForView(view),
+    onEnd: () => {
+      tableCursors = null;
+    },
+    leave: (name, cx) => plugin.helix.runStatic(new Context(plugin.helix, plugin.hostForView(cx), null, null), name),
+  };
+}
+
 function runInMain(plugin: HookPlugin, name: string, cx: Context, active: ActiveCell): void {
   const { table } = active;
   const main = table.editor.cm;
@@ -353,9 +426,56 @@ function runInMain(plugin: HookPlugin, name: string, cx: Context, active: Active
   plugin.helix.ui.render?.(host);
 }
 
+function walkWords(plugin: HookPlugin, name: string, cx: Context, active: ActiveCell): boolean {
+  const motion = /^(move|extend)_(.+)$/.exec(name);
+  if (!motion || !WORD_MOTIONS.has(motion[2]!) || walking) return false;
+  const { table, cell } = active;
+  const doc = cx.host.state.doc;
+  const before = selOf(cx);
+  const forward = RIGHT_MOTIONS.has(motion[2]!);
+  const atEdge = forward ? before.primary().to() >= doc.length : before.primary().cursor(doc) === 0;
+  if (!atEdge) {
+    walking = true;
+    plugin.helix.runStatic(cx, name);
+    walking = false;
+    if (selOf(cx).primary().cursor(doc) !== before.primary().cursor(doc)) return true;
+    setSel(cx, before);
+  }
+  if (motion[1] === "extend") {
+    selectRect(table, cell, cell);
+    return true;
+  }
+  const row = table.rows[cell.row]!;
+  if (forward) {
+    if (cell.col < row.length - 1) moveToCell(table, cell.row, cell.col + 1, "start");
+    else if (cell.row < table.rows.length - 1) moveToCell(table, cell.row + 1, 0, "start");
+    else leaveTable(plugin, table, "down", 1);
+  } else if (cell.col > 0) moveToCell(table, cell.row, cell.col - 1, "last");
+  else if (cell.row > 0) moveToCell(table, cell.row - 1, table.rows[cell.row - 1]!.length - 1, "last");
+  else leaveTable(plugin, table, "up", 1);
+  return true;
+}
+
+function copyToRow(plugin: HookPlugin, cx: Context, active: ActiveCell, direction: 1 | -1): boolean {
+  const { table, cell } = active;
+  const target = cell.row + direction * cx.count();
+  if (target < 0 || target >= table.rows.length) return true;
+  const ranges = selOf(cx).ranges;
+  tableCursors = new CellCursors(
+    cursorEnv(plugin),
+    [{ row: cell.row, col: cell.col }, { row: target, col: cell.col }],
+    (text) => ranges.map((r) => new Range(Math.min(r.anchor, text.length), Math.min(r.head, text.length))),
+    null,
+  );
+  return true;
+}
+
 function cellCommand(plugin: HookPlugin, name: string, cx: Context, active: ActiveCell): boolean {
   const { table, cell } = active;
-  if (table.selectedCells.length > 0 && cellSelectionCommand(plugin, name, cx, active)) return true;
+  if (table.selectedCells.length > 0) {
+    if (cellSelectionCommand(plugin, name, cx, active)) return true;
+    if (DOCUMENT_COMMANDS.has(name) || name === "goto_file_start" || name === "open_below" || name === "open_above") table.deselectCells();
+  } else if (walkWords(plugin, name, cx, active)) return true;
   if (HISTORY_COMMANDS.has(name)) {
     commitHistoryNow(cx.host);
     const main = plugin.hostForView(table.editor.cm);
@@ -373,11 +493,15 @@ function cellCommand(plugin: HookPlugin, name: string, cx: Context, active: Acti
       return true;
     case "extend_line":
     case "extend_line_below":
-    case "select_line_below": {
-      const row = table.rows[cell.row]!;
-      if (row.length > 1) table.selectCells(row[0]!, row[row.length - 1]!);
+    case "select_line_below":
+    case "extend_line_above":
+    case "select_line_above":
+      selectRows(table, cell.row, cell.row);
       return true;
-    }
+    case "copy_selection_on_next_line":
+      return copyToRow(plugin, cx, active, 1);
+    case "copy_selection_on_prev_line":
+      return copyToRow(plugin, cx, active, -1);
     case "open_below":
       table.insertRow(cell.row + 1, cell.col, false);
       enterInsertLater(plugin, table);
@@ -428,8 +552,9 @@ function cellEdge(plugin: HookPlugin, edge: HelixEdge, active: ActiveCell): bool
   if (edge.extend) {
     const rowDelta = edge.direction === "up" ? -1 : edge.direction === "down" ? 1 : 0;
     const colDelta = edge.direction === "left" ? -1 : edge.direction === "right" ? 1 : 0;
-    const next = table.getCellAt(cell.row + rowDelta * edge.count, cell.col + colDelta * edge.count) ?? table.getCellAt(cell.row + rowDelta, cell.col + colDelta);
-    if (next) table.selectCells(cell, next);
+    selectRect(table, cell, cell);
+    if (rowDelta !== 0) moveSelectionHead(table, rowDelta * edge.count, 0, true);
+    else if (edge.count > 1) moveSelectionHead(table, 0, colDelta * (edge.count - 1), true);
     return true;
   }
   const doc = active.editor.cm.state.doc;
@@ -467,23 +592,40 @@ function enterTable(view: EditorView, table: TableWidget, edge: HelixEdge): bool
   const left = view.contentDOM.getBoundingClientRect().left + (edge.goalColumn ?? 0);
   let col = 0;
   row.forEach((cell, i) => {
-    const el = (cell as unknown as { el: HTMLElement }).el;
-    if (el.getBoundingClientRect().left <= left) col = i;
+    if (cell.el.getBoundingClientRect().left <= left) col = i;
   });
   moveToCell(table, rowIndex, col, "start");
   return true;
 }
 
 export function obsidianHooks(plugin: HookPlugin): Extension {
-  return helixHooks.of({
-    key(key, cx) {
-      if (key !== "A-o" && key !== "A-O") return false;
+  return [tableSelectionMarks, helixHooks.of({
+    intercept(key, host) {
+      if (!tableCursors) return false;
+      return tableCursors.handleKey(key, host);
+    },
+    textObject(kind, ch, cx) {
       const active = activeCell(plugin, cx.host);
       if (!active) return false;
       const { table, cell } = active;
+      if (ch === "p") {
+        selectWholeTable(table);
+        return true;
+      }
+      if (ch !== "|") return false;
+      if (table.selectedCells.length > 1 && kind === "inside") {
+        const places = cellsIn(table).map((c) => ({ row: c.row, col: c.col }));
+        table.deselectCells();
+        tableCursors = new CellCursors(cursorEnv(plugin), places, (text) => [new Range(0, Math.max(text.length, 1))], null);
+        return true;
+      }
+      if (kind === "around") {
+        selectRect(table, cell, cell);
+        return true;
+      }
       table.deselectCells();
-      table.insertColumn(cell.row, key === "A-o" ? cell.col + 1 : cell.col, table.alignments[cell.col], false);
-      enterInsertLater(plugin, table);
+      const length = cx.host.state.doc.length;
+      setSel(cx, new Selection([new Range(0, Math.max(length, 1))], 0).ensureInvariants(cx.host.state.doc));
       return true;
     },
     stopBeforeEnd: (host) => activeCell(plugin, host) !== null,
@@ -502,7 +644,20 @@ export function obsidianHooks(plugin: HookPlugin): Extension {
       const ranges: MotionRange[] = [];
       const fm = propertiesHidden(plugin, view) ? frontmatterEnd(view) : null;
       if (fm !== null) ranges.push({ from: 0, to: fm, kind: "skip" });
-      for (const table of tableWidgets(view)) ranges.push({ from: table.start, to: table.end, kind: "enter" });
+      const selecting = host.state.field(helixField).mode === "select";
+      for (const table of tableWidgets(view)) {
+        if (!selecting) {
+          ranges.push({ from: table.start, to: table.end, kind: "enter" });
+          continue;
+        }
+        const doc = view.state.doc;
+        const first = doc.lineAt(table.start).number;
+        const last = doc.lineAt(table.end).number;
+        for (let n = first; n <= last; n++) {
+          const line = doc.line(n);
+          ranges.push({ from: line.from, to: Math.min(line.to + 1, doc.length), kind: n === first + 1 ? "skip" : "row" });
+        }
+      }
       ranges.push(...embedRanges(view));
       return ranges.sort((a, b) => a.from - b.from);
     },
@@ -516,6 +671,15 @@ export function obsidianHooks(plugin: HookPlugin): Extension {
       const active = activeCell(plugin, cx.host);
       if (active) return cellCommand(plugin, name, cx, active);
       const view = cx.host.view;
+      if ((name === "extend_line_below" || name === "extend_line" || name === "select_line_below") && view && isLivePreview(view) && !plugin.isConfigView(view)) {
+        cx.callbacks.push(() => {
+          const doc = view.state.doc;
+          const end = selOf(cx).primary().to();
+          const last = doc.lineAt(Math.max(end - 1, 0));
+          if (tableWidgets(view).some((t) => doc.lineAt(t.start).number === last.number)) plugin.helix.runStatic(new Context(plugin.helix, cx.host, null, null), "extend_line_below");
+        });
+        return false;
+      }
       if ((name === "goto_file_start" || name === "extend_to_file_start") && view && cx.countRaw === null && !plugin.isConfigView(view) && propertiesHidden(plugin, view)) {
         const fm = frontmatterEnd(view);
         if (fm === null) return false;
@@ -533,7 +697,34 @@ export function obsidianHooks(plugin: HookPlugin): Extension {
       const cm = componentOf(md).activeCM;
       return cm && cm !== host.view ? plugin.hostForView(cm) : null;
     },
-  });
+  })];
+}
+
+export const tableSelectionMarks = EditorView.updateListener.of((update) => {
+  if (!update.selectionSet && !update.docChanged) return;
+  const view = update.view;
+  const doc = view.state.doc;
+  const ranges = view.state.selection.ranges.filter((r) => !r.empty);
+  for (const table of tableWidgets(view)) {
+    const covered = ranges.some((r) => r.from < table.end && r.to > table.start);
+    if (!covered && !table.containerEl.classList.contains("hx-rows-selected")) continue;
+    table.containerEl.classList.toggle("hx-rows-selected", covered);
+    for (const row of table.rows) {
+      for (const cell of row) {
+        const line = doc.lineAt(cell.getAbsoluteOffsets().textStart);
+        const on = ranges.some((r) => r.from < line.to && r.to > line.from && !(r.from >= table.start && r.to <= table.end));
+        cell.el.classList.toggle("hx-row-selected", on);
+      }
+    }
+  }
+});
+
+export function tableCursorCount(): number | null {
+  return tableCursors?.count() ?? null;
+}
+
+export function endTableCursors(): void {
+  tableCursors?.end();
 }
 
 export function tableOwner(view: EditorView): EditorView | null {

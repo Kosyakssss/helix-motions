@@ -4,7 +4,8 @@ A faithful port of Helix to Obsidian. The Helix engine is [helix-cm6](https://gi
 
 ## Philosophy
 
-- Helix is the spec. Behaviour follows the pinned Helix commit in `CONTRIBUTING.md`, and the oracle decides. If Helix does not have a command, object or option, we do not have it.
+- Helix is the spec. Behaviour follows the pinned Helix commit in `CONTRIBUTING.md`, and the oracle decides. If Helix does not have an editing command, object or option, we do not have it.
+- Obsidian's own commands are the exception. `helix.toml` can bind any of them by its id, so people can use Helix's layout and add Obsidian's features to it. `docs/obsidian-commands.md` lists them.
 - If Helix and Obsidian need different behaviour, port the Helix behaviour as an option and make Obsidian's behaviour the default. Auto-pairs and insert keys are examples.
 - Native first. Use Obsidian's own UI where it exists: pickers, line numbers, cursorline, indent guides. Draw only what Obsidian cannot. If a `helix.toml` option has an Obsidian setting, switch that setting instead of drawing.
 - Helix options live only in `helix.toml`, so people can use their Helix config without changes. The settings tab holds only choices Helix cannot make.

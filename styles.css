@@ -354,3 +354,50 @@ body.hx-autoinfo-ui .hx-autoinfo {
 .hx-config-editor .hx-panel {
   border-radius: 0 0 var(--radius-s) var(--radius-s);
 }
+
+.cm-table-widget .hx-cell-cursors {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hx-cell-cursors .hx-cell-part {
+  position: absolute;
+  left: var(--hx-part-left);
+  top: var(--hx-part-top);
+  width: var(--hx-part-width);
+  height: var(--hx-part-height);
+}
+
+.hx-cell-cursors .hx-cell-part-range {
+  background-color: var(--hx-selection);
+}
+
+.hx-cell-cursors .hx-cell-part-head {
+  background-color: var(--text-normal);
+  opacity: 0.55;
+}
+
+.markdown-source-view.mod-cm6 .cm-table-widget .hx-row-selected {
+  background-color: var(--hx-selection);
+}
+
+.markdown-source-view.mod-cm6 .cm-table-widget.hx-rows-selected ::selection,
+.markdown-source-view.mod-cm6 .cm-table-widget.hx-rows-selected ::highlight(hx-sel),
+.markdown-source-view.mod-cm6 .cm-table-widget.has-selection ::highlight(hx-sel) {
+  background-color: transparent;
+}
+
+.markdown-source-view.mod-cm6 .cm-table-widget.has-selection .hx-cursors {
+  display: none;
+}
+
+.markdown-source-view.mod-cm6 .cm-table-widget .cm-panels {
+  display: none;
+}
+
+.markdown-source-view.mod-cm6 .cm-table-widget:not(.has-selection) .cm-line::selection,
+.markdown-source-view.mod-cm6 .cm-table-widget:not(.has-selection) .cm-line ::selection {
+  background-color: var(--hx-selection) !important;
+}

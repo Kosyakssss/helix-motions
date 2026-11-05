@@ -268,7 +268,7 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 
 | Key | Mark | Reason |
 | --- | --- | --- |
-| `[keys.normal]`, `[keys.select]`, `[keys.insert]` | port | Full syntax: command names, `":typed args"`, arrays, `@keys` macros, nested tables. |
+| `[keys.normal]`, `[keys.select]`, `[keys.insert]` | port | Obsidian command ids too (`docs/obsidian-commands.md`). Full syntax: command names, `":typed args"`, arrays, `@keys` macros, nested tables. |
 | Insert-mode key chords (`j` then `k` to exit) | port | First key waits. On any other key, insert both. |
 | `scrolloff` | adapt | CM6 scroll margins. |
 | `scroll-lines` | adapt | `zj`/`zk` step only. Mouse wheel stays native. |
@@ -319,6 +319,42 @@ Options that Helix does not have. They live in the plugin's settings tab, not in
 | Insert keys (Enter, Tab, Backspace) | Obsidian | Obsidian: list continuation, list indent, table cells. Helix: `insert_newline`, `smart_tab`, `delete_char_backward` ports. |
 | Read keys by position | On | Normal and select mode read keys by their US-layout position with non-Latin layouts. |
 
+## Tables in Live Preview
+
+In Source mode a table is text, and every Helix command works on it as text. In Live Preview a table has two levels.
+
+**Text level.** The cursor is in a cell, and the cell acts as a one-line document.
+
+| Keys | What they do |
+| --- | --- |
+| `mi\|` | Select the cell's text |
+| `e`, `b`, `w` (and their long forms) | Work in the cell, then go on to the next or previous cell, row and out of the table |
+| `h`, `l` | Cross cells, and stay in the row |
+| `j`, `k` | Go up or down in the same column, by visual row in a wrapped cell |
+| `gh`, `gl`, `I`, `A`, `f`, `t` | Stay in the cell |
+| `/`, `n`, `%`, `gg`, `ge`, `u` | Act on the note |
+| `o`, `O` | Add a row and start typing |
+| `J` | Nothing: joining rows breaks the table |
+| `C`, `Alt-C` | Add a cursor in the same column in another row. Keys then run in every cell, and motions stop at each cell's edge. `,` goes back to one cursor. |
+
+**Cell level.** Obsidian's own cell selection. `ma|` selects a cell, `x` selects rows, `mip` and `map` select the table. In select mode, extending past the edge of the cell's text selects the cell, and further motions add cells. A mouse drag also does this.
+
+| Keys | What they do |
+| --- | --- |
+| `h`, `j`, `k`, `l`, `w`, `b`, `e` | Move by cells. In select mode they extend the selection. |
+| `d` | Obsidian's delete: whole rows or columns go, the whole table goes, and otherwise the text is cleared |
+| `c` | Clear the cells and type in all of them |
+| `i`, `a` | Type at the start or end of every selected cell |
+| `mi\|` | One cursor in each cell, with its text selected |
+| `y`, `p` | Copy and paste as a table block |
+| `x` | Grow to whole rows, then add rows |
+| `C`, `Alt-C` | Add a row to the selection |
+| `;`, `,`, `Esc` | Go back to a cursor in the cell |
+
+A selection that starts outside the table treats it as lines. It runs over whole rows, and the covered rows are marked. The hidden `|---|` line goes with the header.
+
+Tab, Shift-Tab and Enter in insert mode stay Obsidian's: next cell, previous cell, cell below, and a new row at the end. Columns and moving rows are Obsidian commands: bind the `editor:table-*` ids from `docs/obsidian-commands.md`. Other cells show rendered text, so a cursor in a cell with formatting is drawn at an approximate place.
+
 ## Decisions
 
 1. Live Preview shows the markup inside every Helix selection in normal and select mode.
@@ -337,7 +373,6 @@ Steps 2 to 6 are implemented.
 Known gaps:
 
 - `:tutor` shows "not available".
-- Tables: a selection that starts outside the table is Obsidian's own, not per cell.
 - In insert mode, Live Preview shows markup only around the caret. Typing replaces a non-empty native selection, so the native selection must be a caret there.
 - `Cmd-Z` is Obsidian's own undo unless `helix.toml` binds `Meta-z`. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
 - On a 20,000-line note one key costs about one Obsidian transaction (~25 ms on an M1 Air).
