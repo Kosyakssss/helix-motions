@@ -54,7 +54,7 @@ Only the maintainer pushes, tags and releases.
 
 - No code comments. The Style Settings block in `styles.css` is the only exception.
 - A commit message is one sentence that says what changed for the user. See `git log`.
-- README, docs and the plugin description: plain, short sentences. Do not sell Helix; readers know it. Show that this is a full, faithful port. No "it is not X, it is Y" contrasts and no defensive claims.
+- README, docs and the plugin description: write like the Obsidian docs and kepano's projects (pele, knap, obsidian-maps). Start with one plain sentence that says what the thing does. Keep the README short and link to focused pages in `docs/`. Use imperative, sentence-case headings, common words, American English and realistic examples. Write Obsidian's UI in bold, with `→` between steps. Do not sell Helix; readers know it. Show that this is a full, faithful port. No "it is not X, it is Y" contrasts and no defensive claims.
 
 ## Repository
 

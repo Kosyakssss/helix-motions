@@ -19,7 +19,7 @@ Done, in `src/obsidian/hooks.ts`.
 
 Done, in `src/obsidian/hooks.ts`, on the table widget's own API. Source mode stays plain Helix.
 
-- The levels and keys are in `docs/scope.md`.
+- The levels and keys are in `docs/tables.md`.
 - `j` from above enters the header cell under the cursor. `k` from below enters the last row. At the start or end of the note, leaving adds a blank line, as Obsidian does.
 - Counts: move inside the cell first, then across cells, then out of the table.
 - `Esc` in normal mode in a cell does nothing.
