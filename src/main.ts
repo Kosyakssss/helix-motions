@@ -1,7 +1,7 @@
 import { MarkdownView, Notice, Platform, type Editor, type EventRef, Plugin, TFile, editorInfoField, normalizePath } from "obsidian";
 import type { EditorView } from "@codemirror/view";
 import type { Extension, TransactionSpec } from "@codemirror/state";
-import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Context, defaultConfig, HelixEditor, helixAppKeys, helixExtension, helixField, helixOwned, type Host, type KeyLayer, loadConfig, loadRegex, loadSyntax, makeViewOps, plain, print, Registers, setHelix, type SyntaxSessions, SystemClipboard, toNative, uiRefresher } from "helix-cm6/engine";
+import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Context, defaultConfig, HelixEditor, appKeyLayer, helixExtension, helixField, helixOwned, type Host, type KeyLayer, loadConfig, loadRegex, loadSyntax, makeViewOps, plain, print, Registers, setHelix, type SyntaxSessions, SystemClipboard, toNative, uiRefresher } from "helix-cm6/engine";
 import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
@@ -323,7 +323,7 @@ export default class HelixMotionsPlugin extends Plugin {
   }
 
   keymapsFor(keys: KeyLayer): HelixEditor["keymaps"] {
-    return buildKeymaps(keys, { app: helixAppKeys, available: (name) => this.helix.hasCommand(name) });
+    return buildKeymaps(keys, { app: appKeyLayer, available: (name) => this.helix.hasCommand(name) });
   }
 
   async reloadConfig(): Promise<void> {

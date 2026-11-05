@@ -1,7 +1,7 @@
 import { editorLivePreviewField, MarkdownView, type App } from "obsidian";
 import { EditorSelection, type Extension } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import { commitHistoryNow, Context, type HelixEdge, type HelixEditor, helixField, helixHooks, type Host, type MotionRange, pasteImpl, pushJump, Range, Selection, selOf, setSel } from "helix-cm6/engine";
+import { commitHistoryNow, Context, type HelixEdge, type HelixEditor, helixField, hostHooks, type Host, type MotionRange, pasteImpl, pushJump, Range, Selection, selOf, setSel } from "helix-cm6/engine";
 import { whileMovingToCell } from "./selection-snap";
 import { CellCursors, type CursorEnv } from "./table-cursors";
 
@@ -599,7 +599,7 @@ function enterTable(view: EditorView, table: TableWidget, edge: HelixEdge): bool
 }
 
 export function obsidianHooks(plugin: HookPlugin): Extension {
-  return [tableSelectionMarks, helixHooks.of({
+  return [tableSelectionMarks, hostHooks.of({
     intercept(key, host) {
       if (!tableCursors) return false;
       return tableCursors.handleKey(key, host);

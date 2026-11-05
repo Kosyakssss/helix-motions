@@ -1,6 +1,6 @@
 import { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { commitHistoryNow, Context, HeadlessHost, type HelixEditor, helixField, helixHooks, helixOwned, historyField, type Host, type Mode, Range, selOf, Selection, setHelix, setMode, setSel, syncNativeSelection, toNative } from "helix-cm6/engine";
+import { commitHistoryNow, Context, HeadlessHost, type HelixEditor, helixField, hostHooks, helixOwned, historyField, type Host, type Mode, Range, selOf, Selection, setHelix, setMode, setSel, syncNativeSelection, toNative } from "helix-cm6/engine";
 
 export interface CursorCell {
   row: number;
@@ -120,7 +120,7 @@ export class CellCursors {
         historyField,
         syncNativeSelection,
         EditorState.allowMultipleSelections.of(true),
-        helixHooks.of({
+        hostHooks.of({
           command: (name, cx) => this.command(name, cx),
           textObject: (kind, ch, cx) => this.textObject(kind, ch, cx),
         }),
