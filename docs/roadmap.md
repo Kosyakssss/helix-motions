@@ -19,15 +19,12 @@ Done, in `src/obsidian/hooks.ts`.
 
 Done, in `src/obsidian/hooks.ts`, on the table widget's own API. Source mode stays plain Helix.
 
-- `h` and `l` at a cell edge move to the next cell, but not past the first or last cell of a row. `j` and `k` move to the cell above or below, in the same column, clamped. In a wrapped cell they move by visual rows first.
-- `gh`, `gl` and word motions stay in the cell.
+- The levels and keys are in `docs/scope.md`.
 - `j` from above enters the header cell under the cursor. `k` from below enters the last row. At the start or end of the note, leaving adds a blank line, as Obsidian does.
 - Counts: move inside the cell first, then across cells, then out of the table.
 - `Esc` in normal mode in a cell does nothing.
 - Insert mode in a cell is Obsidian's.
-- Selections follow Obsidian. When all text of a cell is selected, the cell is selected; extending further selects cells. `x` selects the whole row, also in an empty cell, and a second `x` adds the next row. hjkl and counts extend a cell selection. A selection that starts outside the table selects whole cells in it and continues as text after it.
-- On selected cells: `d` clears them; `c` clears them and inserts in the first; `y` copies them as table text; `p` pastes table text over them and other text into the anchor cell; `r`, `~` and `` ` `` act per cell; `i` and `a` insert at the start of the first or the end of the last cell; `;` and `Esc` return to one cell; `gg` and `ge` extend to the first or last row, `gh` and `gl` to the first or last column. `%` stays the whole note.
-- `o` and `O` add a row. `A-o` and `A-O` add a column to the right or left. Helix has no such command, so these keys apply only in a cell.
+- `o` and `O` add a row. Columns are Obsidian's `editor:table-*` commands, which `helix.toml` can bind.
 - Messages, prompts and key help show in the note's panel, not in the cell.
 - Undo is one history for the note, not one per cell editor.
 - Document-wide commands in a cell (`/`, `n`, `*`, `gg`, `G`, `%`, `C-o`, `]`) act on the note and reopen a cell when needed. Macros and `.` follow focus across cells.
