@@ -25,6 +25,7 @@ A faithful port of Helix to Obsidian. The Helix engine is [helix-cm6](https://gi
 
 ## How to work
 
+- Tables have two systems for several cursors: `C` cursors in `src/obsidian/table-cursors.ts`, and note selections such as `%` then `s` in `src/obsidian/hooks.ts`. A fix in one goes into the other. The scenario "a cursor in a cell acts the same alone, with C and after % and s" compares them.
 - If the request is to diagnose, find the root cause and report it. Do not fix until asked.
 - For UX choices, give the options with their differences in function and in use, and let the maintainer choose. Discuss before you make large changes.
 - Test edge cases hard. An engine change gets a case in helix-cm6's `test/oracle/suites.ts`. An Obsidian behaviour change gets a scenario in `test/e2e/scenarios.ts`. Before a release, check that helix-cm6's CI passed on the pinned commit, and run `bun test/e2e/scenarios.ts` and `bun test/e2e/differential.ts`.
