@@ -1,7 +1,7 @@
 {
   "id": "helix-motions",
   "name": "Helix Motions",
-  "version": "2.0.1",
+  "version": "2.0.2",
   "minAppVersion": "1.15.0",
   "description": "A full, faithful port of Helix editing: its keymap, selections, multiple cursors, commands and config, tested against Helix itself.",
   "author": "Kote",
