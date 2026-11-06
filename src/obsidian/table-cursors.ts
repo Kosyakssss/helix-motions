@@ -1,6 +1,7 @@
-import { EditorState } from "@codemirror/state";
+import { EditorState, Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { commitHistoryNow, Context, HeadlessHost, type HelixEditor, helixField, hostHooks, helixOwned, historyField, type Host, type Mode, Range, selOf, Selection, setHelix, setMode, setSel, syncNativeSelection, toNative } from "helix-cm6/engine";
+import { commitHistoryNow, Context, HeadlessHost, type HelixEditor, helixField, hostHooks, helixOwned, historyField, type Host, type Mode, Range, rangeParts, Selection, setHelix, setMode, setSel, syncNativeSelection, toNative } from "helix-cm6/engine";
+import { CellLayers, type PaintCell } from "./cell-paint";
 
 export interface CursorCell {
   row: number;
@@ -45,7 +46,7 @@ const LEAVING = new Set([
   "undo", "redo", "earlier", "later", "goto_file_start", "extend_to_file_start", "goto_last_line", "extend_to_last_line", "goto_file_end", "extend_to_file_end", "select_all", "search", "rsearch", "search_next", "search_prev", "extend_search_next", "extend_search_prev", "search_selection", "search_selection_detect_word_boundaries", "jump_backward", "jump_forward", "goto_next_paragraph", "goto_prev_paragraph", "global_search", "extend_line", "extend_line_below", "extend_line_above", "select_line_below", "select_line_above", "page_up", "page_down", "half_page_up", "half_page_down", "page_cursor_up", "page_cursor_down", "page_cursor_half_up", "page_cursor_half_down", "scroll_up", "scroll_down", "align_view_top", "align_view_center", "align_view_bottom", "goto_window_top", "goto_window_center", "goto_window_bottom", "goto_word", "extend_to_word", "command_mode",
 ]);
 
-const VERTICAL: Record<string, number> = {
+export const VERTICAL: Record<string, number> = {
   move_visual_line_down: 1,
   extend_visual_line_down: 1,
   move_line_down: 1,
@@ -55,6 +56,9 @@ const VERTICAL: Record<string, number> = {
   move_line_up: -1,
   extend_line_up: -1,
 };
+
+export const CROSS_RIGHT = /^move_(char_right|next_(long_|sub_)?word_(start|end))$/;
+export const CROSS_LEFT = /^move_(char_left|prev_(long_|sub_)?word_(start|end))$/;
 
 function escapePipes(text: string): string {
   return text.replace(/(?<!\\)\|/g, "\\|");
@@ -68,14 +72,51 @@ function comparePlaces(a: Place, b: Place): number {
   return a.row - b.row || a.col - b.col;
 }
 
-function keepInLine(range: Range, line: { from: number; to: number }, original: Range): Range {
-  if ((range.from() >= line.to && range.to() > line.to) || range.to() <= line.from - 1) return original;
-  const clamp = (pos: number) => Math.max(line.from, Math.min(pos, line.to));
-  const anchor = clamp(range.anchor);
-  const head = clamp(range.head);
-  if (anchor !== head) return new Range(anchor, head);
-  const from = line.to > line.from ? Math.min(anchor, line.to - 1) : line.from;
-  return new Range(from, from + 1);
+export const LINE_MOTIONS = new Set(["goto_line_start", "goto_line_end", "goto_line_end_newline", "goto_first_nonwhitespace", "extend_to_line_start", "extend_to_line_end", "extend_to_line_end_newline", "extend_to_first_nonwhitespace"]);
+export const NEXT_KEY_COMMANDS = new Set(["find_till_char", "find_next_char", "till_prev_char", "find_prev_char", "extend_till_char", "extend_next_char", "extend_till_prev_char", "extend_prev_char", "select_textobject_inner", "select_textobject_around"]);
+export const SELECTION_COMMANDS = new Set(["match_brackets", "expand_selection", "shrink_selection", "select_next_sibling", "select_prev_sibling", "select_all_children", "select_all_siblings", "move_parent_node_start", "move_parent_node_end", "extend_parent_node_start", "extend_parent_node_end"]);
+export const CELL_MOTION = /^(move|extend)_(char_left|char_right|line_up|line_down|visual_line_up|visual_line_down|(prev|next)_(long_|sub_)?word_(start|end))$/;
+
+export function runsOnCellText(name: string): boolean {
+  return CELL_MOTION.test(name) || LINE_MOTIONS.has(name) || SELECTION_COMMANDS.has(name);
+}
+
+let releaseShadow: ((host: Host) => void) | null = null;
+
+export function setShadowRelease(release: (host: Host) => void): void {
+  releaseShadow = release;
+}
+
+export const CELL_SHADOW = "cell-shadow";
+
+export function runOnText(helix: HelixEditor, text: string, mode: Mode, range: Range, name: string, count: number | null, register: string | null, key: string | null): Range[] {
+  const doc = Text.of(text.split("\n"));
+  if (key === "|" && name.startsWith("select_textobject")) return [new Range(0, Math.max(text.length, 1))];
+  const local = new Range(Math.max(Math.min(range.anchor, text.length), 0), Math.max(Math.min(range.head, text.length), 0));
+  const shadow = new HeadlessHost(text, [helixField, historyField, syncNativeSelection, EditorState.allowMultipleSelections.of(true)], CELL_SHADOW);
+  setMode(shadow, mode, new Selection([local], 0).ensureInvariants(doc));
+  const inner = new Context(helix, shadow, count, register);
+  helix.runStatic(inner, name);
+  if (key !== null) inner.onNextKeyCallback?.cb(inner, key);
+  releaseShadow?.(shadow);
+  return shadow.state.field(helixField).selection.ranges.map((r) => (r.anchor === r.head ? new Range(r.anchor, r.anchor + 1) : r));
+}
+
+export function isStuck(text: string, before: Range, after: Range, forward: boolean): boolean {
+  const doc = Text.of(text.split("\n"));
+  const now = after.cursor(doc);
+  return now === before.cursor(doc) || (forward && now >= text.length);
+}
+
+export function cellNeighbor(rows: readonly (readonly unknown[])[], place: Place, forward: boolean, words: boolean): Place | null {
+  const columns = rows[place.row]?.length ?? 0;
+  if (forward) {
+    if (place.col < columns - 1) return { row: place.row, col: place.col + 1 };
+    return words && place.row < rows.length - 1 ? { row: place.row + 1, col: 0 } : null;
+  }
+  if (place.col > 0) return { row: place.row, col: place.col - 1 };
+  if (!words || place.row === 0) return null;
+  return { row: place.row - 1, col: (rows[place.row - 1]?.length ?? 1) - 1 };
 }
 
 export class CellCursors {
@@ -83,13 +124,13 @@ export class CellCursors {
   private places: Place[];
   private deferred: (() => void) | null = null;
   private ended = false;
-  private movingOne = false;
+  private readonly layers = new CellLayers(() => this.draw());
 
   constructor(
     private readonly env: CursorEnv,
     places: readonly Place[],
     ranges: (text: string, place: Place) => readonly Range[],
-    enter: "insert_mode" | "append_mode" | null,
+    enter: string | null,
   ) {
     const active = env.active();
     const focus: Place = active ? { row: active.cell.row, col: active.cell.col } : places[0]!;
@@ -108,7 +149,7 @@ export class CellCursors {
     return this.table()?.getCellAt(place.row, place.col) ?? null;
   }
 
-  private build(perLine: readonly (readonly Range[])[], primary: Place, mode: Mode): HeadlessHost {
+  private build(perLine: readonly (readonly Range[])[], primary: Place, mode: Mode, primaryRange?: Range): HeadlessHost {
     const texts = this.places.map((place) => this.cell(place)?.text ?? "");
     const doc = texts.join("\n");
     const active = this.env.active();
@@ -122,8 +163,7 @@ export class CellCursors {
         EditorState.allowMultipleSelections.of(true),
         hostHooks.of({
           command: (name, cx) => this.command(name, cx),
-          textObject: (kind, ch, cx) => this.textObject(kind, ch, cx),
-        }),
+          }),
       ],
       id,
     );
@@ -133,9 +173,11 @@ export class CellCursors {
     this.places.forEach((place, i) => {
       const text = texts[i]!;
       if (samePlace(place, primary)) primaryIndex = out.length;
-      for (const range of perLine[i] ?? [new Range(0, 1)]) {
+      const own = [...(perLine[i] ?? [new Range(0, 1)])].sort((a, b) => a.from() - b.from());
+      for (const range of own) {
         const anchor = Math.min(range.anchor, text.length);
         const head = Math.min(range.head, text.length);
+        if (samePlace(place, primary) && primaryRange && range.eq(primaryRange)) primaryIndex = out.length;
         out.push(anchor === head ? new Range(start + anchor, start + anchor + 1) : new Range(start + anchor, start + head));
       }
       start += text.length + 1;
@@ -197,45 +239,90 @@ export class CellCursors {
       };
       return true;
     }
-    if (/^(move|extend)_/.test(name) && !this.movingOne) {
-      this.moveEach(name, cx);
+    const mode = this.host.state.field(helixField).mode;
+    if ((CROSS_RIGHT.test(name) || CROSS_LEFT.test(name)) && mode === "normal") {
+      const steps = cx.count();
+      const register = cx.register;
+      this.deferred = () => {
+        for (let i = 0; i < steps; i++) this.step(name, register);
+      };
+      return true;
+    }
+    if (NEXT_KEY_COMMANDS.has(name)) {
+      cx.onNextKey((inner, key) => this.onOwnText(inner, name, this.env.helix.keyChar(key) ?? key));
+      return true;
+    }
+    if (runsOnCellText(name) || /^(move|extend)_/.test(name)) {
+      this.onOwnText(cx, name, null);
       return true;
     }
     return false;
   }
 
-  private moveEach(name: string, cx: Context): void {
-    const doc = cx.host.state.doc;
-    const before = this.host.state.field(helixField).selection;
-    this.movingOne = true;
-    const moved = before.ranges.map((range) => {
+  private onOwnText(cx: Context, name: string, key: string | null): void {
+    const doc = this.host.state.doc;
+    const value = this.host.state.field(helixField);
+    const out: Range[] = [];
+    let primary = 0;
+    value.selection.ranges.forEach((range, i) => {
       const line = doc.lineAt(Math.min(range.from(), doc.length));
-      setSel(cx, new Selection([range], 0));
-      this.env.helix.runStatic(new Context(this.env.helix, this.host, cx.countRaw, cx.register), name);
-      return keepInLine(this.host.state.field(helixField).selection.primary(), line, range);
+      const local = new Range(range.anchor - line.from, range.head - line.from);
+      if (i === value.selection.primaryIndex) primary = out.length;
+      for (const next of runOnText(this.env.helix, line.text, value.mode, local, name, cx.countRaw, cx.register, key)) out.push(new Range(next.anchor + line.from, next.head + line.from));
     });
-    this.movingOne = false;
-    setSel(cx, new Selection(moved, before.primaryIndex));
+    setSel(cx, new Selection(out, primary));
   }
 
-  private textObject(_kind: "inside" | "around", ch: string, cx: Context): boolean {
-    if (ch !== "|") return false;
-    const doc = cx.host.state.doc;
-    const ranges: Range[] = [];
-    for (let n = 1; n <= this.places.length; n++) {
-      const line = doc.line(n);
-      ranges.push(new Range(line.from, Math.max(line.to, line.from + 1)));
-    }
-    setSel(cx, new Selection(ranges, Math.min(doc.lineAt(selOf(cx).primary().from()).number - 1, ranges.length - 1)));
-    return true;
+  private step(name: string, register: string | null): void {
+    const doc = this.host.state.doc;
+    const before = this.host.state.field(helixField).selection;
+    const cx = new Context(this.env.helix, this.host, null, register);
+    const forward = CROSS_RIGHT.test(name);
+    const words = name.includes("word");
+    const perPlace = new Map<string, Range[]>();
+    const places: Place[] = [];
+    const add = (place: Place, range: Range) => {
+      const key = `${place.row}:${place.col}`;
+      const own = perPlace.get(key);
+      if (own) own.push(range);
+      else {
+        perPlace.set(key, [range]);
+        places.push(place);
+      }
+    };
+    let crossed = false;
+    let primary: { place: Place; range: Range } | null = null;
+    const stayed: Range[] = [];
+    const rows = this.table()?.rows ?? [];
+    before.ranges.forEach((range, i) => {
+      const line = doc.lineAt(Math.min(range.from(), doc.length));
+      const place = this.places[Math.min(line.number - 1, this.places.length - 1)]!;
+      const local = new Range(range.anchor - line.from, range.head - line.from);
+      const next = runOnText(this.env.helix, line.text, "normal", local, name, null, register, null)[0] ?? local;
+      const target = isStuck(line.text, local, next, forward) ? cellNeighbor(rows, place, forward, words) : null;
+      let at = place;
+      let result = isStuck(line.text, local, next, forward) ? local : next;
+      if (target) {
+        crossed = true;
+        at = target;
+        const length = this.cell(target)?.text.length ?? 0;
+        result = forward || length === 0 ? new Range(0, 1) : new Range(length - 1, length);
+      }
+      stayed.push(new Range(result.anchor + line.from, result.head + line.from));
+      add(at, result);
+      if (i === before.primaryIndex) primary = { place: at, range: result };
+    });
+    const main = primary as { place: Place; range: Range } | null;
+    if (crossed && main) this.rebuild(places, perPlace, main.place, main.range);
+    else setSel(cx, new Selection(stayed, before.primaryIndex));
   }
 
-  private rebuild(places: Place[], perPlace: Map<string, Range[]>, primary: Place): void {
+  private rebuild(places: Place[], perPlace: Map<string, Range[]>, primary: Place, primaryRange?: Range): void {
     const key = (place: Place) => `${place.row}:${place.col}`;
     const mode = this.host.state.field(helixField).mode;
     const unique = new Map(places.map((place) => [key(place), place]));
     this.places = [...unique.values()].sort(comparePlaces);
-    this.host = this.build(this.places.map((place) => perPlace.get(key(place)) ?? [new Range(0, 1)]), primary, mode);
+    this.host = this.build(this.places.map((place) => perPlace.get(key(place)) ?? [new Range(0, 1)]), primary, mode, primaryRange);
   }
 
   private moveRows(delta: number): void {
@@ -288,21 +375,6 @@ export class CellCursors {
     return true;
   }
 
-  private clampRanges(): void {
-    const doc = this.host.state.doc;
-    const cx = new Context(this.env.helix, this.host, null, null);
-    const mode = this.host.state.field(helixField).mode;
-    if (mode === "insert") return;
-    const sel = this.host.state.field(helixField).selection;
-    const ranges = sel.ranges.map((range) => {
-      const line = doc.lineAt(Math.min(range.from(), doc.length));
-      const from = Math.min(range.from(), Math.max(line.to - 1, line.from));
-      const to = Math.max(Math.min(range.to(), line.to), from + 1);
-      return range.anchor <= range.head ? new Range(from, to) : new Range(to, from);
-    });
-    if (ranges.some((range, i) => !range.eq(sel.ranges[i]!))) setSel(cx, new Selection(ranges, sel.primaryIndex));
-  }
-
   private afterKey(before: EditorState | null): void {
     if (this.deferred) {
       const work = this.deferred;
@@ -314,7 +386,6 @@ export class CellCursors {
       this.host.state = before;
       this.env.helix.setStatus("that would change the table's rows");
     }
-    this.clampRanges();
     const mode = this.host.state.field(helixField).mode;
     let dirty = false;
     const doc = this.host.state.doc;
@@ -339,7 +410,7 @@ export class CellCursors {
       if (main) commitHistoryNow(this.env.hostFor(main));
     }
     this.syncPrimary(mode);
-    if (count === 1 && before) {
+    if (count === 1 && before && !this.env.helix.activePrompt) {
       this.end();
       return;
     }
@@ -354,79 +425,47 @@ export class CellCursors {
     const index = this.places.findIndex((place) => samePlace(place, active.cell));
     if (index < 0) return;
     const length = host.state.doc.length;
-    const ranges = this.perLine()[index]!.map((r) => {
-      const anchor = Math.min(r.anchor, length);
-      const head = Math.min(r.head, length);
-      return new Range(anchor, head);
-    });
+    const doc = this.host.state.doc;
+    const line = doc.line(index + 1);
+    const main = this.host.state.field(helixField).selection.primary();
+    const own = this.perLine()[index]!;
+    const primary = Math.max(own.findIndex((r) => r.anchor === main.anchor - line.from && r.head === main.head - line.from), 0);
+    const ranges = own.map((r) => new Range(Math.min(r.anchor, length), Math.min(r.head, length)));
     if (ranges.length === 0) ranges.push(new Range(0, Math.min(1, length)));
-    setMode(host, mode, new Selection(ranges, 0));
+    setMode(host, mode, new Selection(ranges, primary));
   }
 
   private draw(): void {
+    if (this.ended) return;
     const table = this.table();
     const active = this.env.active();
     if (!table || !active) return;
-    const root = table.containerEl;
-    root.querySelector(":scope > .hx-cell-cursors")?.remove();
-    const box = root.createDiv("hx-cell-cursors");
-    const rootRect = root.getBoundingClientRect();
-    const mode = this.host.state.field(helixField).mode;
-    const lines = this.perLine();
+    const doc = this.host.state.doc;
+    const value = this.host.state.field(helixField);
+    const insert = value.mode === "insert";
+    const shape = this.env.helix.config.cursorShape[value.mode];
+    const cells: PaintCell[] = [];
     this.places.forEach((place, i) => {
       if (samePlace(place, active.cell)) return;
       const cell = this.cell(place);
       if (!cell) return;
-      for (const range of lines[i]!) this.drawRange(box, rootRect, root, cell, range, mode);
+      const line = doc.line(i + 1);
+      const ranges: PaintCell["ranges"] = [];
+      value.selection.ranges.forEach((range, r) => {
+        if (doc.lineAt(Math.min(range.from(), doc.length)).number !== line.number) return;
+        const primary = r === value.selection.primaryIndex;
+        const part = rangeParts(doc, range, primary, insert, shape);
+        ranges.push({ from: part.from - line.from, to: part.to - line.from, pos: part.pos - line.from, end: part.end - line.from, eol: part.eol, primary: false });
+      });
+      cells.push({ content: cell.contentEl ?? cell.el, source: line.text, ranges });
     });
+    this.layers.draw(table.containerEl, cells, shape, insert);
   }
 
-  private drawRange(box: HTMLElement, rootRect: DOMRect, root: HTMLElement, cell: CursorCell, range: Range, mode: Mode): void {
-    const content = cell.contentEl ?? cell.el;
-    const rendered = content.textContent ?? "";
-    const scale = rendered === cell.text ? 1 : 0;
-    const place = (rect: DOMRect | { left: number; top: number; width: number; height: number }, cls: string) => {
-      const part = box.createDiv(cls);
-      part.setCssProps({
-        "--hx-part-left": `${rect.left - rootRect.left + root.scrollLeft}px`,
-        "--hx-part-top": `${rect.top - rootRect.top + root.scrollTop}px`,
-        "--hx-part-width": `${rect.width}px`,
-        "--hx-part-height": `${rect.height}px`,
-      });
-    };
-    const domRange = content.ownerDocument.createRange();
-    const point = (offset: number): [Node, number] | null => {
-      const walker = content.ownerDocument.createTreeWalker(content, NodeFilter.SHOW_TEXT);
-      let left = offset;
-      let last: Text | null = null;
-      for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
-        last = node;
-        if (left <= node.length) return [node, left];
-        left -= node.length;
-      }
-      return last ? [last, last.length] : null;
-    };
-    const from = Math.min(range.from(), rendered.length);
-    const to = Math.min(range.to(), rendered.length);
-    const start = point(from);
-    const end = point(to);
-    const fallback = content.getBoundingClientRect();
-    if (start && end && to > from && (scale === 1 || to - from > 0)) {
-      domRange.setStart(start[0], start[1]);
-      domRange.setEnd(end[0], end[1]);
-      for (const rect of Array.from(domRange.getClientRects())) place(rect, "hx-cell-part hx-cell-part-range");
-    }
-    const headAt = Math.max(Math.min(range.head === range.to() ? to - 1 : from, rendered.length - 1), 0);
-    const headStart = point(headAt);
-    const headEnd = point(Math.min(headAt + 1, rendered.length));
-    let headRect: DOMRect | { left: number; top: number; width: number; height: number } | null = null;
-    if (headStart && headEnd && rendered.length > 0) {
-      domRange.setStart(headStart[0], headStart[1]);
-      domRange.setEnd(headEnd[0], headEnd[1]);
-      headRect = domRange.getBoundingClientRect();
-    }
-    const rect = headRect && headRect.width > 0 ? headRect : { left: fallback.left, top: fallback.top, width: 8, height: fallback.height };
-    place(mode === "insert" ? { left: rect.left, top: rect.top, width: 2, height: rect.height } : rect, "hx-cell-part hx-cell-part-head");
+  checkFocus(): void {
+    const active = this.env.active();
+    const focus = active?.table.containerEl.ownerDocument.activeElement;
+    if (!active || !focus || !active.table.containerEl.contains(focus)) this.end();
   }
 
   count(): number {
@@ -436,7 +475,7 @@ export class CellCursors {
   end(): void {
     if (this.ended) return;
     this.ended = true;
-    for (const el of Array.from(this.table()?.containerEl.querySelectorAll(":scope > .hx-cell-cursors") ?? [])) el.remove();
+    this.layers.clear();
     this.env.onEnd();
   }
 }

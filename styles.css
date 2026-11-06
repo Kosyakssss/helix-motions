@@ -355,28 +355,26 @@ body.hx-autoinfo-ui .hx-autoinfo {
   border-radius: 0 0 var(--radius-s) var(--radius-s);
 }
 
-.cm-table-widget .hx-cell-cursors {
-  position: absolute;
-  inset: 0;
+.cm-table-widget.hx-cell-cursors-on {
+  isolation: isolate;
+}
+
+.cm-table-widget .hx-cell-selections {
+  z-index: -1;
   pointer-events: none;
+}
+
+.cm-table-widget .hx-cell-cursors {
   z-index: 1;
+  pointer-events: none;
 }
 
-.hx-cell-cursors .hx-cell-part {
-  position: absolute;
-  left: var(--hx-part-left);
-  top: var(--hx-part-top);
-  width: var(--hx-part-width);
-  height: var(--hx-part-height);
+.cm-table-widget .hx-cell-cursors .hx-cell-bar {
+  border-radius: 0;
 }
 
-.hx-cell-cursors .hx-cell-part-range {
-  background-color: var(--hx-selection);
-}
-
-.hx-cell-cursors .hx-cell-part-head {
-  background-color: var(--text-normal);
-  opacity: 0.55;
+.markdown-source-view.mod-cm6 .cm-scroller.hx-caret-in-cell .cm-content {
+  caret-color: transparent;
 }
 
 .markdown-source-view.mod-cm6 .cm-table-widget .hx-row-selected {
@@ -384,7 +382,7 @@ body.hx-autoinfo-ui .hx-autoinfo {
 }
 
 .markdown-source-view.mod-cm6 .cm-table-widget.hx-rows-selected ::selection,
-.markdown-source-view.mod-cm6 .cm-table-widget.hx-rows-selected ::highlight(hx-sel),
+.markdown-source-view.mod-cm6 .cm-table-widget.hx-rows-selected:not(.hx-cell-cursors-on) ::highlight(hx-sel),
 .markdown-source-view.mod-cm6 .cm-table-widget.has-selection ::highlight(hx-sel) {
   background-color: transparent;
 }

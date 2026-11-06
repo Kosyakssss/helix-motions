@@ -1,9 +1,10 @@
 import { editorLivePreviewField, MarkdownView, type App } from "obsidian";
-import { EditorSelection, type Extension } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
-import { commitHistoryNow, Context, type HelixEdge, type HelixEditor, helixField, hostHooks, type Host, type MotionRange, pasteImpl, pushJump, Range, Selection, selOf, setSel } from "helix-cm6/engine";
+import { EditorSelection, EditorState, type Extension, Text } from "@codemirror/state";
+import { EditorView, type ViewUpdate } from "@codemirror/view";
+import { commitHistoryNow, Context, HeadlessHost, type HelixEdge, type HelixEditor, helixField, historyField, hostHooks, type Host, type Mode, type MotionRange, pasteImpl, pushJump, Range, rangeParts, Selection, selOf, setMode, setSel, syncNativeSelection } from "helix-cm6/engine";
 import { whileMovingToCell } from "./selection-snap";
-import { CellCursors, type CursorEnv } from "./table-cursors";
+import { CellLayers, type PaintCell } from "./cell-paint";
+import { CellCursors, cellNeighbor, CROSS_LEFT, CROSS_RIGHT, type CursorEnv, isStuck, NEXT_KEY_COMMANDS, runOnText, runsOnCellText, VERTICAL } from "./table-cursors";
 
 let tableCursors: CellCursors | null = null;
 let walking = false;
@@ -14,7 +15,7 @@ interface TableCell {
   text: string;
   el: HTMLElement;
   contentEl?: HTMLElement;
-  getAbsoluteOffsets(): { textStart: number; textEnd: number };
+  getAbsoluteOffsets(): { start: number; end: number; textStart: number; textEnd: number };
 }
 
 interface TableWidget {
@@ -330,6 +331,15 @@ function cellSelectionCommand(plugin: HookPlugin, name: string, cx: Context, act
     case "switch_to_uppercase":
       perCell(table, (text) => text.toUpperCase());
       return true;
+    case "select_regex":
+    case "split_selection":
+    case "keep_selections":
+    case "remove_selections": {
+      const places = cellsIn(table).map((c) => ({ row: c.row, col: c.col }));
+      table.deselectCells();
+      tableCursors = new CellCursors(cursorEnv(plugin), places, (text) => [new Range(0, Math.max(text.length, 1))], name);
+      return true;
+    }
     case "insert_mode":
     case "append_mode": {
       const cells = cellsIn(table);
@@ -599,9 +609,9 @@ function enterTable(view: EditorView, table: TableWidget, edge: HelixEdge): bool
 }
 
 export function obsidianHooks(plugin: HookPlugin): Extension {
-  return [tableSelectionMarks, hostHooks.of({
+  return [tableMarks(plugin), guardTableEdits(plugin), hostHooks.of({
     intercept(key, host) {
-      if (!tableCursors) return false;
+      if (!tableCursors) return typeInCells(plugin, key, host);
       return tableCursors.handleKey(key, host);
     },
     textObject(kind, ch, cx) {
@@ -670,6 +680,7 @@ export function obsidianHooks(plugin: HookPlugin): Extension {
     command(name, cx) {
       const active = activeCell(plugin, cx.host);
       if (active) return cellCommand(plugin, name, cx, active);
+      if (noteCellsCommand(plugin, name, cx)) return true;
       const view = cx.host.view;
       if ((name === "extend_line_below" || name === "extend_line" || name === "select_line_below") && view && isLivePreview(view) && !plugin.isConfigView(view)) {
         cx.callbacks.push(() => {
@@ -700,8 +711,7 @@ export function obsidianHooks(plugin: HookPlugin): Extension {
   })];
 }
 
-export const tableSelectionMarks = EditorView.updateListener.of((update) => {
-  if (!update.selectionSet && !update.docChanged) return;
+function markRows(update: ViewUpdate): void {
   const view = update.view;
   const doc = view.state.doc;
   const ranges = view.state.selection.ranges.filter((r) => !r.empty);
@@ -712,12 +722,346 @@ export const tableSelectionMarks = EditorView.updateListener.of((update) => {
     for (const row of table.rows) {
       for (const cell of row) {
         const line = doc.lineAt(cell.getAbsoluteOffsets().textStart);
-        const on = ranges.some((r) => r.from < line.to && r.to > line.from && !(r.from >= table.start && r.to <= table.end));
+        const on = ranges.some((r) => r.from < line.to && r.to > line.from && (!(r.from >= table.start && r.to <= table.end) || (r.from <= line.from && r.to >= line.to)));
         cell.el.classList.toggle("hx-row-selected", on);
       }
     }
   }
-});
+}
+
+function leaveCellWithNote(plugin: HookPlugin, view: EditorView): void {
+  const md = activeView(plugin.app);
+  const active = md ? componentOf(md).tableCell : null;
+  if (!active || active.table.editor.cm !== view) return;
+  const { from, to } = view.state.selection.main;
+  if (from < active.table.start || to > active.table.end) view.focus();
+}
+
+function followIntoCell(plugin: HookPlugin, view: EditorView): void {
+  const value = view.state.field(helixField, false);
+  const native = view.state.selection;
+  if (!value || tableCursors || native.ranges.length !== 1 || native.main.empty) return;
+  const { from, to } = native.main;
+  const table = tableWidgets(view).find((t) => from >= t.start && to <= t.end);
+  if (!table) return;
+  const cell = table.rows.flat().find((c) => {
+    const offsets = c.getAbsoluteOffsets();
+    return from >= offsets.textStart && to <= offsets.textEnd;
+  });
+  if (!cell) return;
+  const start = cell.getAbsoluteOffsets().textStart;
+  const md = activeView(plugin.app);
+  const active = md ? componentOf(md).tableCell : null;
+  if (active?.editor.cm.state.field(helixField, false)?.mode === "insert") return;
+  if (active?.cell === cell) {
+    const own = active.editor.cm.state.selection.main;
+    if (own.from + start === from && own.to + start === to) return;
+  }
+  whileMovingToCell(() => table.setCellFocus(cell.row, cell.col, () => EditorSelection.single(from - start, to - start)));
+  const now = md ? componentOf(md).tableCell : null;
+  if (!now || now.cell.row !== cell.row || now.cell.col !== cell.col) return;
+  const primary = value.selection.primary();
+  setMode(plugin.hostForView(now.editor.cm), value.mode, new Selection([new Range(primary.anchor - start, primary.head - start)], 0));
+}
+
+const paintedTables = new WeakMap<EditorView, Map<HTMLElement, CellLayers>>();
+
+function paintMainRanges(plugin: HookPlugin, view: EditorView): void {
+  const value = view.state.field(helixField, false);
+  if (!value) return;
+  let painted = paintedTables.get(view);
+  const tables = tableWidgets(view);
+  if (!painted) {
+    if (tables.length === 0) return;
+    painted = new Map();
+    paintedTables.set(view, painted);
+  }
+  const doc = view.state.doc;
+  const insert = value.mode === "insert";
+  const shape = plugin.helix.config.cursorShape[value.mode];
+  const md = activeView(plugin.app);
+  const focused = md ? (componentOf(md).tableCell?.table ?? null) : null;
+  const several = value.selection.ranges.length > 1;
+  const main = value.selection.primary();
+  view.scrollDOM.classList.toggle("hx-caret-in-cell", insert && several && tables.some((t) => main.from() >= t.start && main.to() <= t.end));
+  const seen = new Set<HTMLElement>();
+  for (const table of tables) {
+    const root = table.containerEl;
+    const cells: PaintCell[] = [];
+    if (several && !tableCursors && focused !== table) {
+      for (const cell of table.rows.flat()) {
+        const { start, end, textStart, textEnd } = cell.getAbsoluteOffsets();
+        const ranges: PaintCell["ranges"] = [];
+        value.selection.ranges.forEach((range, i) => {
+          const first = doc.lineAt(range.from());
+          const whole = range.from() <= first.from && range.to() >= doc.lineAt(Math.max(range.to() - 1, range.from())).to;
+          if (range.from() < table.start || range.to() > table.end + (whole ? 1 : 0)) return;
+          const primary = i === value.selection.primaryIndex;
+          const part = rangeParts(doc, range, primary, insert, shape);
+          if (whole) {
+            const row = table.rows.find((r) => r[0] && doc.lineAt(r[0].getAbsoluteOffsets().textStart).number === doc.lineAt(part.pos).number);
+            const edge = row && part.pos >= row[row.length - 1]!.getAbsoluteOffsets().end ? row[row.length - 1] : row?.[0];
+            if (edge !== cell) return;
+            const length = textEnd - textStart;
+            const atEnd = edge === row![row!.length - 1] && part.pos >= end;
+            ranges.push({ from: 0, to: 0, pos: atEnd ? length : 0, end: atEnd ? length : Math.min(1, length), eol: atEnd || length === 0, primary });
+            return;
+          }
+          const from = Math.max(part.from, textStart);
+          const to = Math.min(part.to, textEnd);
+          const holdsCursor = part.pos >= start && part.pos < end;
+          if (to <= from && !holdsCursor) return;
+          const cursor = Math.max(Math.min(part.pos, textEnd), textStart);
+          ranges.push({
+            from: from - textStart,
+            to: Math.max(to, from) - textStart,
+            pos: holdsCursor ? cursor - textStart : -1,
+            end: holdsCursor ? Math.max(Math.min(part.end, textEnd), cursor) - textStart : -1,
+            eol: part.pos >= textEnd,
+            primary,
+          });
+        });
+        if (ranges.length > 0) cells.push({ content: cell.contentEl ?? cell.el, source: doc.sliceString(textStart, textEnd), ranges });
+      }
+    }
+    let layers = painted.get(root);
+    if (cells.length === 0) {
+      layers?.clear();
+      painted.delete(root);
+      continue;
+    }
+    if (!layers) {
+      layers = new CellLayers(() => paintMainRanges(plugin, view));
+      painted.set(root, layers);
+    }
+    seen.add(root);
+    layers.draw(root, cells, shape, insert);
+  }
+  for (const [root, layers] of painted) {
+    if (seen.has(root)) continue;
+    layers.clear();
+    painted.delete(root);
+  }
+}
+
+function severalInTables(view: EditorView): boolean {
+  const value = view.state.field(helixField, false);
+  if (!value || value.selection.ranges.length < 2) return false;
+  const tables = tableWidgets(view);
+  return value.selection.ranges.some((r) => tables.some((t) => r.from() >= t.start && r.to() <= t.end));
+}
+
+export function composesAside(view: EditorView): boolean {
+  return tableCursors !== null || severalInTables(view);
+}
+
+function typeInCells(plugin: HookPlugin, key: string, host: Host): boolean {
+  const view = host.view;
+  const value = view?.state.field(helixField, false);
+  if (!view || value?.mode !== "insert" || plugin.helix.activePrompt || !severalInTables(view)) return false;
+  if (key === "ret" || key === "tab") return true;
+  const cx = new Context(plugin.helix, host, null, null);
+  if (key === "backspace" || key === "del") {
+    plugin.helix.runStatic(cx, key === "del" ? "delete_char_forward" : "delete_char_backward");
+    return true;
+  }
+  const ch = plugin.helix.keyChar(key);
+  if (ch === null) return false;
+  plugin.helix.insertChar(cx, ch);
+  return true;
+}
+
+const ROW_COPIES: Record<string, number> = { copy_selection_on_next_line: 1, copy_selection_on_prev_line: -1 };
+const ROW_CHANGES = new Set(["open_below", "open_above", "join_selections", "join_selections_space", "add_newline_above", "add_newline_below", "indent", "unindent"]);
+const LINE_INSERTS: Record<string, string> = { insert_at_line_start: "goto_first_nonwhitespace", insert_at_line_end: "goto_line_end_newline" };
+
+function holdingCell(tables: TableWidget[], range: Range): { table: TableWidget; cell: TableCell } | null {
+  for (const table of tables) {
+    if (range.from() < table.start || range.from() > table.end) continue;
+    for (const cell of table.rows.flat()) {
+      const { start, end } = cell.getAbsoluteOffsets();
+      if (range.from() >= start && range.to() <= end) return { table, cell };
+    }
+  }
+  return null;
+}
+
+function cellEnd(cell: TableCell, forward: boolean): Range {
+  const { textStart, textEnd } = cell.getAbsoluteOffsets();
+  return forward || textEnd === textStart ? new Range(textStart, textStart + 1) : new Range(textEnd - 1, textEnd);
+}
+
+function snapIntoCell(tables: TableWidget[], moved: Range, forward: boolean, doc: EditorState["doc"]): Range {
+  const pos = moved.cursor(doc);
+  const table = tables.find((t) => pos >= t.start && pos <= t.end);
+  if (!table) return moved;
+  const cells = table.rows.flat();
+  if (cells.some((c) => pos >= c.getAbsoluteOffsets().start && pos < c.getAbsoluteOffsets().end)) return moved;
+  const next = forward ? cells.find((c) => c.getAbsoluteOffsets().textStart >= pos) : [...cells].reverse().find((c) => c.getAbsoluteOffsets().textEnd <= pos);
+  return next ? cellEnd(next, forward) : moved;
+}
+
+function shadowHost(text: string, value: { mode: Mode }, selection: Selection, view: EditorView | null): HeadlessHost {
+  const shadow = new HeadlessHost(text, [helixField, historyField, syncNativeSelection, EditorState.allowMultipleSelections.of(true)], view ? "note-shadow" : "cell-shadow");
+  if (view) Object.defineProperty(shadow, "view", { value: view });
+  setMode(shadow, value.mode, selection);
+  return shadow;
+}
+
+function sameColumn(table: TableWidget, cell: TableCell, row: number, range: Range): Range | null {
+  const target = table.rows[row]?.[Math.min(cell.col, (table.rows[row]?.length ?? 1) - 1)];
+  if (!target) return null;
+  const from = cell.getAbsoluteOffsets().textStart;
+  const { textStart, textEnd } = target.getAbsoluteOffsets();
+  const put = (at: number) => Math.min(textStart + at - from, textEnd);
+  const anchor = put(range.anchor);
+  const head = put(range.head);
+  return anchor === head ? new Range(anchor, anchor + 1) : new Range(anchor, head);
+}
+
+function runInCell(plugin: HookPlugin, cx: Context, held: { table: TableWidget; cell: TableCell }, range: Range, name: string, count: number | null, key: string | null): Range[] {
+  const { table, cell } = held;
+  const { textStart, textEnd } = cell.getAbsoluteOffsets();
+  const state = table.editor.cm.state;
+  const text = state.sliceDoc(textStart, textEnd);
+  const local = new Range(Math.max(Math.min(range.anchor - textStart, text.length), 0), Math.max(Math.min(range.head - textStart, text.length), 0));
+  const moved = runOnText(plugin.helix, text, state.field(helixField).mode, local, name, count, cx.register, key);
+  if (CROSS_RIGHT.test(name) || CROSS_LEFT.test(name)) {
+    const forward = CROSS_RIGHT.test(name);
+    if (isStuck(text, local, moved[0] ?? local, forward)) {
+      const place = cellNeighbor(table.rows, cell, forward, name.includes("word"));
+      const target = place ? table.getCellAt(place.row, place.col) : null;
+      return [target ? cellEnd(target, forward) : range];
+    }
+  }
+  return moved.map((r) => new Range(r.anchor + textStart, r.head + textStart));
+}
+
+function moveCellRanges(plugin: HookPlugin, cx: Context, tables: TableWidget[], name: string, key: string | null): void {
+  const view = cx.host.view!;
+  const doc = view.state.doc;
+  const value = view.state.field(helixField);
+  const crossing = CROSS_RIGHT.test(name) || CROSS_LEFT.test(name);
+  const forward = !/prev|left|up/.test(name);
+  const steps = crossing ? cx.count() : 1;
+  const count = crossing ? null : cx.countRaw;
+  let selection = value.selection;
+  const copy = ROW_COPIES[name];
+  let noteShadow: HeadlessHost | null = null;
+  for (let step = 0; step < steps; step++) {
+    const out: Range[] = [];
+    let primary = 0;
+    selection.ranges.forEach((range, i) => {
+      if (i === selection.primaryIndex) primary = out.length;
+      const held = holdingCell(tables, range);
+      if (held && name in VERTICAL) {
+        out.push(sameColumn(held.table, held.cell, held.cell.row + VERTICAL[name]! * cx.count(), range) ?? range);
+        return;
+      }
+      if (held && copy !== undefined) {
+        const added = sameColumn(held.table, held.cell, held.cell.row + copy * cx.count(), range);
+        out.push(range);
+        if (added) {
+          if (i === selection.primaryIndex) primary = out.length;
+          out.push(added);
+        }
+        return;
+      }
+      if (held) {
+        out.push(...runInCell(plugin, cx, held, range, name, count, key));
+        return;
+      }
+      noteShadow ??= shadowHost(doc.toString(), value, new Selection([range], 0), view);
+      const shadow = noteShadow;
+      setSel(new Context(plugin.helix, shadow, null, null), new Selection([range], 0));
+      const inner = new Context(plugin.helix, shadow, count, cx.register);
+      plugin.helix.runStatic(inner, name);
+      if (key !== null) inner.onNextKeyCallback?.cb(inner, key);
+      for (const moved of shadow.state.field(helixField).selection.ranges) out.push(name.startsWith("extend") ? moved : snapIntoCell(tables, moved, forward, doc));
+    });
+    selection = new Selection(out, primary);
+  }
+  setSel(cx, selection);
+}
+
+function noteCellsCommand(plugin: HookPlugin, name: string, cx: Context): boolean {
+  const view = cx.host.view;
+  const value = view?.state.field(helixField, false);
+  if (!view || !value || value.mode === "insert" || plugin.helix.activePrompt || value.selection.ranges.length < 2) return false;
+  const tables = tableWidgets(view);
+  if (!value.selection.ranges.some((r) => holdingCell(tables, r))) return false;
+  if (ROW_CHANGES.has(name)) {
+    plugin.helix.setStatus("that would change the table's rows");
+    return true;
+  }
+  if (LINE_INSERTS[name]) {
+    moveCellRanges(plugin, cx, tables, LINE_INSERTS[name]!, null);
+    plugin.helix.runStatic(new Context(plugin.helix, cx.host, null, null), "insert_mode");
+    return true;
+  }
+  if (NEXT_KEY_COMMANDS.has(name)) {
+    cx.onNextKey((inner, key) => moveCellRanges(plugin, inner, tables, name, plugin.helix.keyChar(key) ?? key));
+    return true;
+  }
+  if (!runsOnCellText(name) && ROW_COPIES[name] === undefined) return false;
+  moveCellRanges(plugin, cx, tables, name, null);
+  return true;
+}
+
+const pendingEscapes = new WeakMap<Text, number[]>();
+
+function guardTableEdits(plugin: HookPlugin): Extension {
+  return EditorState.transactionFilter.of((tr) => {
+    if (!tr.docChanged || tr.isUserEvent("undo") || tr.isUserEvent("redo")) return tr;
+    const md = activeView(plugin.app);
+    const view = md ? (md.editor as unknown as { cm?: EditorView }).cm : null;
+    if (!view || view.state !== tr.startState || view.state.selection.ranges.length < 2) return tr;
+    const tables = tableWidgets(view);
+    if (tables.length === 0) return tr;
+    let refused = false;
+    const escapes: number[] = [];
+    const doc = tr.startState.doc;
+    tr.changes.iterChanges((fromA, toA, fromB, _toB, inserted) => {
+      const table = tables.find((t) => fromA <= t.end && toA >= t.start);
+      if (!table) return;
+      const cell = table.rows.flat().find((c) => {
+        const { start, end } = c.getAbsoluteOffsets();
+        return fromA >= start && toA <= end;
+      });
+      const text = inserted.toString();
+      if (cell) {
+        if (text.includes("\n")) refused = true;
+        for (const match of text.matchAll(/(?<!\\)\|/g)) escapes.push(fromB + match.index);
+        return;
+      }
+      if (fromA !== doc.lineAt(fromA).from || toA < doc.lineAt(Math.max(toA - 1, fromA)).to) refused = true;
+    });
+    if (refused) {
+      window.setTimeout(() => plugin.helix.setStatus("that would change the table's rows"), 0);
+      return [];
+    }
+    if (escapes.length > 0) pendingEscapes.set(tr.newDoc, escapes);
+    return tr;
+  });
+}
+
+function applyEscapes(update: ViewUpdate): void {
+  const escapes = pendingEscapes.get(update.state.doc);
+  if (!escapes) return;
+  pendingEscapes.delete(update.state.doc);
+  update.view.dispatch({ changes: escapes.map((from) => ({ from, insert: "\\" })) });
+}
+
+function tableMarks(plugin: HookPlugin): Extension {
+  return EditorView.updateListener.of((update) => {
+    if (!update.selectionSet && !update.docChanged) return;
+    applyEscapes(update);
+    markRows(update);
+    leaveCellWithNote(plugin, update.view);
+    followIntoCell(plugin, update.view);
+    paintMainRanges(plugin, update.view);
+  });
+}
 
 export function tableCursorCount(): number | null {
   return tableCursors?.count() ?? null;
@@ -725,6 +1069,10 @@ export function tableCursorCount(): number | null {
 
 export function endTableCursors(): void {
   tableCursors?.end();
+}
+
+export function checkTableCursors(): void {
+  tableCursors?.checkFocus();
 }
 
 export function tableOwner(view: EditorView): EditorView | null {

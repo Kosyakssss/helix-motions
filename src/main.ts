@@ -9,7 +9,8 @@ import { releaseBar, renderStatus, syncBar } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
 import { DEFAULT_SETTINGS, HelixSettingTab, type Settings } from "./obsidian/settings";
 import { isMarkupSnap } from "./obsidian/selection-snap";
-import { endTableCursors, afterKey, focusedCell, obsidianHooks, tableOwner } from "./obsidian/hooks";
+import { CELL_SHADOW, setShadowRelease } from "./obsidian/table-cursors";
+import { checkTableCursors, composesAside, endTableCursors, afterKey, focusedCell, obsidianHooks, tableOwner } from "./obsidian/hooks";
 
 export default class HelixMotionsPlugin extends Plugin {
   override settings: Settings = DEFAULT_SETTINGS;
@@ -54,6 +55,7 @@ export default class HelixMotionsPlugin extends Plugin {
     this.registerDomEvent(document, "copy", () => window.setTimeout(() => clipboard.refresh(), 0));
     this.registerDomEvent(document, "cut", () => window.setTimeout(() => clipboard.refresh(), 0));
     this.registerDomEvent(window, "mousedown", () => endTableCursors());
+    this.registerDomEvent(window, "focusin", () => window.setTimeout(checkTableCursors, 0));
     this.registerDomEvent(window, "mouseup", () => {
       window.setTimeout(() => {
         const view = this.activeView;
@@ -68,8 +70,14 @@ export default class HelixMotionsPlugin extends Plugin {
         this.syntaxSessions = sessions;
         this.helix.languages = sessions.loader;
         for (const view of this.syntaxViews) if (!this.isConfigView(view)) sessions.open(view, view.state.doc);
-        this.helix.syntax = (host) =>
-          host.view && !this.isConfigView(host.view) ? sessions.get(host.view, host.state.doc) : null;
+        setShadowRelease((host) => sessions.close(host));
+        this.helix.syntax = (host) => {
+          if (host.id === CELL_SHADOW) {
+            sessions.open(host, host.state.doc);
+            return sessions.get(host, host.state.doc);
+          }
+          return host.view && !this.isConfigView(host.view) ? sessions.get(host.view, host.state.doc) : null;
+        };
       })
       .catch(() => new Notice("Helix: the syntax tree failed to load. Text objects and tree commands use plain text."));
     void loadRegex()
@@ -117,6 +125,7 @@ export default class HelixMotionsPlugin extends Plugin {
         editor: this.helix,
         hostFor: (view) => this.hostForView(view),
         insertKeysHelix: () => this.settings.insertKeys === "helix",
+        composeAside: (view) => composesAside(view),
         suggestTakes: (event) => this.suggestTakes(event),
         onFocusChange: (view) => {
           this.activeView = view;

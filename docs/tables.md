@@ -18,7 +18,7 @@ The cursor is in a cell, and the cell acts as a one-line document.
 | `/`, `n`, `%`, `gg`, `ge`, `u` | Act on the note. |
 | `o`, `O` | Add a row and start typing. |
 | `J` | Nothing, because joining rows breaks the table. |
-| `C`, `Alt-C` | Add a cursor in the same column in another row. Keys then run in every cell, and motions stop at each cell's edge. `,` goes back to one cursor. |
+| `C`, `Alt-C` | Add a cursor in the same column in another row. Keys then run in every cell, and each cursor crosses cells on its own, as above. Cursors stop at the table's edge and merge there. `,` goes back to one cursor. |
 
 ## Select cells
 
@@ -39,6 +39,7 @@ This level uses Obsidian's own cell selection. To reach it:
 | `c` | Clear the cells and type in all of them. |
 | `i`, `a` | Type at the start or end of every selected cell. |
 | `mi\|` | Put one cursor in each cell, with its text selected. |
+| `s`, `S`, `K`, `Alt-K` | Select, split or filter inside the selected cells, as a regex on each cell's text. |
 | `y`, `p` | Copy and paste as a table block. |
 | `x` | Grow to whole rows, then add rows. |
 | `C`, `Alt-C` | Add a row to the selection. |
@@ -47,6 +48,12 @@ This level uses Obsidian's own cell selection. To reach it:
 ## Select across a table
 
 A selection that starts outside the table treats it as lines. It runs over whole rows, and the covered rows are marked. The hidden `|---|` line goes with the header.
+
+## Search the note
+
+`/`, `n` and `%` then `s` work on the whole note. A match in a cell is selected in that cell. When there are several, each one in a cell treats the cell as its whole document and stops at the table's edge, and the others act as in any note. `x` selects whole rows.
+
+Edits that would break a row are refused: several lines into a cell, an indent, or a delete across a cell's edge. A typed `|` is escaped.
 
 ## Keys in insert mode
 
@@ -63,4 +70,4 @@ A-t = "editor:table-col-after"
 
 ## Known limits
 
-Other cells show rendered text, so a cursor in a cell with formatting is drawn at an approximate place.
+Other cells show rendered text, so a cursor on hidden markup such as `**` is drawn on the next visible character.
