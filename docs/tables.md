@@ -70,4 +70,8 @@ A-t = "editor:table-col-after"
 
 ## Known limits
 
-Other cells show rendered text, so a cursor on hidden markup such as `**` is drawn on the next visible character.
+- A row with too few cells stops at its last cell.
+- A malformed table follows Obsidian's grid.
+- A table in a callout, quote or list uses text motions, because Obsidian opens no cell editor there.
+- An escaped `\|` shows as raw text in a rendered cell.
+- Other cells show rendered text, so a cursor on hidden markup such as `**` is drawn on the next visible character.
