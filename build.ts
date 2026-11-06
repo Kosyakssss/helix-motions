@@ -33,6 +33,7 @@ async function build(): Promise<boolean> {
     footer: `/*\n${["tree-sitter/NOTICE", "regex/NOTICE"].map((f) => readFileSync(resolve(root, "node_modules/helix-cm6", f), "utf8").trimEnd()).join("\n\n")}\n*/`,
     sourcemap: process.argv.includes("--watch") ? "inline" : "none",
     minify: false,
+    define: { "import.meta.url": JSON.stringify("file:///helix-motions/") },
   });
   if (!result.success) {
     for (const log of result.logs) process.stderr.write(`${log.message}\n`);
