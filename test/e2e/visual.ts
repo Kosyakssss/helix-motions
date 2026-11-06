@@ -1,4 +1,4 @@
-import { parseMacro } from "../../src/keys";
+import { parseMacro } from "helix-cm6/engine";
 import { ob, openScratch, sendKeys, setDoc } from "./obsidian";
 
 openScratch();

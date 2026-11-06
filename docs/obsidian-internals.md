@@ -10,15 +10,15 @@ Obsidian behaviour that is not documented and that this plugin works around. Fou
 
 ## Live Preview selection snap
 
-On a selection-only update, Live Preview moves selection ends that fall inside hidden markup (replace decorations from before the update). It does this in a later `setTimeout` dispatch with only `selection`: no `userEvent`, no `scrollIntoView`, no effects. This changes a Helix selection that was correct. `isMarkupSnap` in `src/state.ts` drops such a transaction outside insert mode when every range stays on its lines.
+On a selection-only update, Live Preview moves selection ends that fall inside hidden markup (replace decorations from before the update). It does this in a later `setTimeout` dispatch with only `selection`: no `userEvent`, no `scrollIntoView`, no effects. This changes a Helix selection that was correct. `isMarkupSnap` in `src/obsidian/selection-snap.ts` drops such a transaction outside insert mode when every range stays on its lines. It goes to helix-cm6 through its `dropSelectionChange` facet.
 
 ## List hanging indent
 
-After each update, Obsidian sets `text-indent` and `padding-inline-start` on list `.cm-line` elements in a `queueMicrotask`, and does not tell CodeMirror. A layout read that forces a CodeMirror measure before that microtask leaves a stale height map: `moveVertically` can then return the end of the document. Read layout after a dispatch in a microtask queued after it (`restoreVisualRows` in `src/movement.ts`).
+After each update, Obsidian sets `text-indent` and `padding-inline-start` on list `.cm-line` elements in a `queueMicrotask`, and does not tell CodeMirror. A layout read that forces a CodeMirror measure before that microtask leaves a stale height map: `moveVertically` can then return the end of the document. Read layout after a dispatch in a microtask queued after it (`restoreVisualRows` in helix-cm6's `src/movement.ts`).
 
 ## Revealed markup
 
-When the cursor enters a line, Live Preview shows its markup, and the line can wrap differently. Checkboxes, bullets, math and embeds are `contenteditable=false` widgets. `aimAt` in `src/movement.ts` hit-tests the goal column to find what was under it, and `restoreVisualRow` corrects the row after the rewrap.
+When the cursor enters a line, Live Preview shows its markup, and the line can wrap differently. Checkboxes, bullets, math and embeds are `contenteditable=false` widgets. `aimAt` in helix-cm6's `src/movement.ts` hit-tests the goal column to find what was under it, and `restoreVisualRow` corrects the row after the rewrap.
 
 ## Editor suggest
 
@@ -32,3 +32,19 @@ The core word-count plugin listens to `editor-selection-change` and counts `edit
 ## Files
 
 The vault API does not see files in the config folder, and the config folder is not always `.obsidian` (`Vault#configDir`). `helix.toml` lives in the vault root.
+
+## Tables
+
+A table in Live Preview is a block widget. `el.cmTile.widget` on `.cm-table-widget` has `rows`, `start`, `end`, `setCellFocus`, `placeCursorAround`, `selectCells`, `deleteSelection`, `insertRow`, `updateCell` and `dispatchTable`. The focused cell is `editor.editorComponent.tableCell`, with its own nested `EditorView` at `.editor.cm`, which runs its own copy of the Helix extension. A cell's view can be destroyed while a key is still being handled, so a key handler must not read its state afterwards.
+
+On any transaction in the main editor, the widget's `receiveSelection` refocuses the cell that holds the main selection, even if the transaction has no selection. So the main selection must leave the table before the main editor takes focus, and a selection change on a table line is not a markup snap. Moving focus to another cell during `keydown` lets Chromium deliver the key's character to the new cell, so the view layer swallows it.
+
+`selectCells(anchor, head)` ignores `anchor === head`. For a one-cell selection, pass an object made with `Object.create(cell)` as the anchor: bounds read only its `row` and `col`. `deleteSelection` removes whole rows, columns or the table, and clears anything else. Only the focused cell has an editor, and the others show rendered text, so cursors in several cells run in a headless Helix host with one line per cell (`src/obsidian/table-cursors.ts`), and each change is written with `updateCell` and `dispatchTable`.
+
+## Layout after a reveal
+
+When a list line reveals its markup, Obsidian writes the line's `text-indent` and padding after CodeMirror's measure read, in the same cycle, with no transaction. The cursor layers would keep the old position, so the view layer watches `style` on `.cm-line` and measures again.
+
+## Properties
+
+`metadataEditor.focus({ bottom: true })` focuses the Add property button, else the last property, or the heading when folded. Its own keys handle `j`, `k` and leaving to the note.

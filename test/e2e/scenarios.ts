@@ -1,5 +1,5 @@
-import { parseMacro } from "../../src/keys";
-import { api, domKey, evalJs, ob, openScratch, sendDomKey, sendKeys, setDoc, state, type AppState } from "./obsidian";
+import { parseMacro } from "helix-cm6/engine";
+import { api, domKey, evalJs, mouse, ob, openScratch, sendDomKey, sendKeys, setDoc, state, type AppState } from "./obsidian";
 
 type Check = { name: string; run: () => void };
 const results: { name: string; ok: boolean; detail: string }[] = [];
@@ -28,6 +28,840 @@ function consistent(s: AppState & { ranges: [number, number][] }): void {
 
 function dom(code: string): unknown {
   return evalJs(`JSON.stringify((()=>{const v=app.plugins.plugins["helix-motions"].api.view(); ${code}})())`);
+}
+
+
+function cursorLine(): number {
+  return dom(`const value = v.state.doc.lineAt(v.state.selection.main.anchor); return value.number`) as number;
+}
+
+function cell(): [number, number, string] | null {
+  return evalJs(`JSON.stringify((()=>{const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell;return c?[c.cell.row,c.cell.col,c.editor.cm.state.doc.toString()]:null})())`);
+}
+
+function cellsSelected(): number {
+  return evalJs(`JSON.stringify((()=>{const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell;return c?c.table.selectedCells.length:0})())`);
+}
+
+function note(): string {
+  return evalJs(`JSON.stringify(app.workspace.activeLeaf.view.editor.cm.state.doc.toString())`);
+}
+
+function tableKeys(k: string): void {
+  sendKeys(parseMacro(k));
+  Bun.sleepSync(250);
+}
+
+const TABLE = "#[a|]#bove\n\n| h1 | h2 | h3 |\n| -- | -- | -- |\n| a  | bb | c  |\n| d  | ee | f  |\n\nbelow\n";
+
+function inTable(): void {
+  setDoc(TABLE);
+  Bun.sleepSync(500);
+  tableKeys("jj");
+}
+
+function tableScenarios(): Check[] {
+  return [
+    {
+      name: "table: j from above enters the header, k from below enters the last row",
+      run: () => {
+        inTable();
+        expectEq("header", cell()?.slice(0, 2), [0, 0]);
+        tableKeys("3j");
+        expectEq("left below", cell(), null);
+        expectEq("line", cursorLine() > 6, true);
+        tableKeys("k");
+        expectEq("last row", cell()?.[0], 2);
+      },
+    },
+    {
+      name: "table: h and l cross cells but not past the row, and counts go across cells",
+      run: () => {
+        inTable();
+        tableKeys("h");
+        expectEq("stays at the first cell", cell()?.slice(0, 2), [0, 0]);
+        tableKeys("ll");
+        expectEq("second cell", cell()?.slice(0, 2), [0, 1]);
+        tableKeys("9l");
+        expectEq("clamped at the last cell", cell()?.slice(0, 2), [0, 2]);
+        tableKeys("9l");
+        expectEq("stays", cell()?.slice(0, 2), [0, 2]);
+        tableKeys("h");
+        tableKeys("h");
+        expectEq("back one cell", cell()?.[1], 1);
+      },
+    },
+    {
+      name: "table: h lands on the last letter of the cell to the left, j and k keep the letter",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("l");
+        expectEq("next cell", cell()?.slice(0, 2), [1, 1]);
+        const head = () => evalJs<number>(`JSON.stringify(app.workspace.activeLeaf.view.editor.editorComponent.tableCell.editor.cm.state.selection.main.head)`);
+        tableKeys("l");
+        expectEq("second letter", head(), 2);
+        tableKeys("k");
+        expectEq("same letter above", head(), 2);
+        tableKeys("gh");
+        tableKeys("h");
+        expectEq("left cell", cell()?.slice(0, 2), [0, 0]);
+        expectEq("last letter", head(), 2);
+      },
+    },
+    {
+      name: "table: moving between cells does not shift the layout, and a selection in a cell is visible",
+      run: () => {
+        setDoc(TABLE);
+        Bun.sleepSync(500);
+        const height = () => evalJs<number>(`JSON.stringify(document.querySelector(".cm-table-widget").getBoundingClientRect().height)`);
+        const before = height();
+        tableKeys("jj");
+        expectEq("entering the table", height(), before);
+        tableKeys("l");
+        tableKeys("j");
+        expectEq("moving in the table", height(), before);
+        tableKeys("mi|");
+        const shown = evalJs<string>(`JSON.stringify(getComputedStyle(app.workspace.activeLeaf.view.editor.editorComponent.tableCell.editor.cm.dom.querySelector(".cm-line"), "::selection").backgroundColor)`);
+        expectEq("selection colour", shown !== "rgba(0, 0, 0, 0)" && shown !== "transparent", true);
+      },
+    },
+    {
+      name: "table: several cursors cross cells on their own and stop at the table's edge",
+      run: () => {
+        const at = () => evalJs<number[][]>(`JSON.stringify((()=>{const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell;const out=[[c.cell.row,c.cell.col]];for(const m of document.querySelectorAll(".hx-cell-cursors .hx-cell")){const b=m.getBoundingClientRect();const y=b.top+b.height/2;const x=b.left+1;for(const x2 of c.table.rows.flat()){const r=x2.el.getBoundingClientRect();if(x>=r.left&&x<r.right&&y>=r.top&&y<r.bottom)out.push([x2.row,x2.col])}}return out.sort((p,q)=>p[0]-q[0]||p[1]-q[1])})())`);
+        inTable();
+        tableKeys("j");
+        tableKeys("C");
+        expectEq("start", at(), [[1, 0], [2, 0]]);
+        tableKeys("l");
+        expectEq("l crosses", at(), [[1, 1], [2, 1]]);
+        tableKeys("9l");
+        expectEq("l stops at the end of the row", at(), [[1, 2], [2, 2]]);
+        tableKeys("h");
+        expectEq("h crosses back", at(), [[1, 1], [2, 1]]);
+        tableKeys("<esc>");
+        tableKeys(",");
+        inTable();
+        tableKeys("C");
+        expectEq("two rows", at(), [[0, 0], [1, 0]]);
+        tableKeys("e");
+        expectEq("e: the second cursor is at its cell's end, so it crosses and the first stays", at(), [[0, 0], [1, 1]]);
+        tableKeys("e");
+        expectEq("e: the first crosses now", at()[0], [0, 1]);
+        tableKeys("30e");
+        expectEq("e goes on across rows, stops at the last cell, and the cursors merge", cell()?.slice(0, 2), [2, 2]);
+        expectEq("one cursor left", evalJs(`JSON.stringify(document.querySelectorAll(".hx-cell-cursors .hx-cell").length)`), 0);
+        inTable();
+        tableKeys("C");
+        tableKeys("2l");
+        tableKeys("b");
+        tableKeys("9b");
+        expectEq("b stops at the first cell", cell()?.slice(0, 2), [0, 0]);
+        tableKeys("<esc>");
+        tableKeys(",");
+      },
+    },
+    {
+      name: "table: s on selected cells selects the matches inside them",
+      run: () => {
+        const doc = "#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| x needle y needle | b |\n| c | z needle two |\n\nbelow needle\n";
+        setDoc(doc);
+        Bun.sleepSync(500);
+        tableKeys("jjj");
+        tableKeys("ma|");
+        tableKeys("x");
+        tableKeys("x");
+        expectEq("cells selected", cellsSelected(), 4);
+        tableKeys("sneedle");
+        tableKeys("<ret>");
+        expectEq("no cell selection left", cellsSelected(), 0);
+        const count = (selector: string) => evalJs<number>(`JSON.stringify(document.querySelectorAll("${selector}").length)`);
+        expectEq("the other cell's match is drawn", count(".hx-cell-cursors .hx-cell"), 1);
+        tableKeys("cQQ");
+        tableKeys("<esc>");
+        expectEq("all three changed, and the text outside stayed", note().replace(/ +/g, " "), "above\n\n| h1 | h2 |\n| --------- | -------- |\n| x QQ y QQ | b |\n| c | z QQ two |\n\nbelow needle\n");
+        tableKeys(",");
+        setDoc(doc);
+        Bun.sleepSync(500);
+        tableKeys("jjj");
+        tableKeys("ma|");
+        tableKeys("x");
+        tableKeys("x");
+        tableKeys("snomatch");
+        tableKeys("<esc>");
+        expectEq("cancel keeps a cursor in every cell", count(".hx-cell-cursors .hx-cell"), 3);
+        tableKeys(",");
+        setDoc(doc);
+        Bun.sleepSync(500);
+        tableKeys("jjj");
+        tableKeys("ma|");
+        tableKeys("sy");
+        tableKeys("<ret>");
+        expectEq("one cell, one match: selected in the cell", cell()?.slice(0, 2), [1, 0]);
+        expectEq("selection", dom(`const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell.editor.cm;return c.state.sliceDoc(c.state.selection.main.from,c.state.selection.main.to)`), "y");
+      },
+    },
+    {
+      name: "table: a search match in a cell is selected there, and n walks through every match",
+      run: () => {
+        setDoc("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| x needle y needle | b |\n| c | z needle two |\n\nbelow needle\n");
+        Bun.sleepSync(500);
+        const where = () => evalJs<unknown>(`JSON.stringify((()=>{const ed=app.workspace.activeLeaf.view.editor;const c=ed.editorComponent.tableCell;const v=c?c.editor.cm:ed.cm;const m=v.state.selection.main;return [c?[c.cell.row,c.cell.col]:null,m.from,v.state.sliceDoc(m.from,m.to)]})())`);
+        tableKeys("/needle");
+        tableKeys("<ret>");
+        expectEq("first", where(), [[1, 0], 2, "needle"]);
+        tableKeys("n");
+        expectEq("second, same cell", where(), [[1, 0], 11, "needle"]);
+        tableKeys("n");
+        expectEq("third, other cell", where(), [[2, 1], 2, "needle"]);
+        tableKeys("n");
+        expectEq("below the table", (where() as [unknown, number, string])[0], null);
+        tableKeys("N");
+        expectEq("back into the cell", where(), [[2, 1], 2, "needle"]);
+        tableKeys("N");
+        expectEq("back again", where(), [[1, 0], 11, "needle"]);
+      },
+    },
+    {
+      name: "table: % then s shows every match in the cells",
+      run: () => {
+        const count = (selector: string) => evalJs<number>(`JSON.stringify(document.querySelectorAll("${selector}").length)`);
+        const painted = () => [count(".hx-cell-cursors .hx-cell"), count(".hx-cell-cursors .hx-cell-primary"), count(".hx-cell-selections .hx-cell")];
+        setDoc("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| needle | b |\n| c | needle |\n\nbelow\n");
+        Bun.sleepSync(500);
+        tableKeys("%");
+        tableKeys("sneedle");
+        tableKeys("<ret>");
+        expectEq("two in the table: both drawn, one is main", painted(), [2, 1, 2]);
+        expectEq("focus stays on the note", cell(), null);
+        tableKeys(")");
+        expectEq("the main cursor moves", painted(), [2, 1, 2]);
+        tableKeys("cQ");
+        expectEq("the main cursor stays drawn in insert mode", painted()[1], 1);
+        tableKeys("<esc>");
+        expectEq("both changed", note(), "above\n\n| h1 | h2 |\n| -- | -- |\n| Q | b |\n| c | Q |\n\nbelow\n");
+        tableKeys(",");
+        expectEq("one left: nothing drawn from the note", painted(), [0, 0, 0]);
+        expectTrue("and it is in a cell", cell() !== null);
+        tableKeys("<esc>");
+        setDoc("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| needle | b |\n| c | needle |\n\nbelow needle\n");
+        Bun.sleepSync(500);
+        tableKeys("%");
+        tableKeys("sneedle");
+        tableKeys("<ret>");
+        expectEq("also below the table: both cells still drawn", painted().slice(0, 1), [2]);
+        tableKeys("<esc>");
+        tableKeys(",");
+        tableKeys("<esc>");
+        setDoc("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| x needle | b |\n\nbelow\n");
+        Bun.sleepSync(500);
+        tableKeys("%");
+        tableKeys("sneedle");
+        tableKeys("<ret>");
+        expectEq("one match: selected in its cell", cell()?.slice(0, 2), [1, 0]);
+        expectEq("the match", dom(`const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell.editor.cm;const m=c.state.selection.main;return [m.from,c.state.sliceDoc(m.from,m.to)]`), [2, "needle"]);
+        tableKeys("<esc>");
+        setDoc("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| aa | b |\n\nbelow\n");
+        Bun.sleepSync(500);
+        tableKeys("%");
+        expectEq("% alone keeps the row marks and paints no cells", painted(), [0, 0, 0]);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: j and k keep the column, and leave the table at its edges",
+      run: () => {
+        inTable();
+        tableKeys("l");
+        tableKeys("l");
+        tableKeys("j");
+        expectEq("row 1", cell()?.slice(0, 2), [1, 1]);
+        tableKeys("j");
+        expectEq("row 2", cell()?.slice(0, 2), [2, 1]);
+        tableKeys("j");
+        expectEq("out", cell(), null);
+        tableKeys("k");
+        tableKeys("3k");
+        expectEq("out above", cell(), null);
+      },
+    },
+    {
+      name: "table: typing in a cell edits the note, and u undoes it as one history",
+      run: () => {
+        inTable();
+        tableKeys("iZ");
+        tableKeys("<esc>");
+        expectEq("note changed", note().includes("Zh1"), true);
+        tableKeys("u");
+        expectEq("undone", note().includes("Zh1"), false);
+        tableKeys("U");
+        expectEq("redone", note().includes("Zh1"), true);
+      },
+    },
+    {
+      name: "table: x selects the row, x extends it, d removes it",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("x");
+        expectEq("one row", cellsSelected(), 3);
+        tableKeys("x");
+        expectEq("two rows", cellsSelected(), 6);
+        tableKeys("<esc>");
+        expectEq("back to one cell", cellsSelected(), 0);
+        tableKeys("x");
+        tableKeys("d");
+        expectEq("row gone", note().includes("| a"), true);
+        expectEq("row gone", note().includes("| d"), false);
+      },
+    },
+    {
+      name: "table: select mode extends past the cell into cells, y and p copy them as table text",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("v");
+        tableKeys("l");
+        tableKeys("l");
+        expectEq("cells selected", cellsSelected(), 2);
+        tableKeys("y");
+        const text = String(evalJs(`navigator.clipboard.readText().then(t=>JSON.stringify(t))`));
+        expectEq("table text", text.includes("|"), true);
+        tableKeys("<esc><esc>");
+      },
+    },
+    {
+      name: "table: o adds a row and enters insert mode, J does nothing",
+      run: () => {
+        inTable();
+        const rows = () => note().split("\n").filter((l) => l.startsWith("|")).length;
+        const before = rows();
+        tableKeys("J");
+        expectEq("J", rows(), before);
+        tableKeys("o");
+        expectEq("a row more", rows(), before + 1);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: Alt-o is not bound, and an Obsidian command bound in helix.toml adds a column",
+      run: () => {
+        inTable();
+        const columns = () => note().split("\n").find((l) => l.startsWith("|"))!.split("|").length;
+        const before = columns();
+        tableKeys("<A-o>");
+        expectEq("Alt-o does nothing", columns(), before);
+        evalJs(`JSON.stringify(app.commands.executeCommandById("editor:table-col-after"))`);
+        Bun.sleepSync(250);
+        expectEq("a column more", columns(), before + 1);
+      },
+    },
+    {
+      name: "table: mi| selects the cell text, ma| selects the cell, mip selects the table",
+      run: () => {
+        inTable();
+        tableKeys("mi|");
+        expectEq("no cell selection", cellsSelected(), 0);
+        tableKeys("d");
+        expectEq("text gone", note().includes("h1"), false);
+        tableKeys("u");
+        tableKeys("ma|");
+        expectEq("one cell", cellsSelected(), 1);
+        tableKeys(";");
+        expectEq("back to text", cellsSelected(), 0);
+        tableKeys("mip");
+        expectEq("whole table", cellsSelected(), 9);
+        tableKeys("d");
+        expectEq("table gone", note().includes("|"), false);
+        tableKeys("u");
+      },
+    },
+    {
+      name: "table: select mode past the text selects this cell, then neighbours, and motions work on cells",
+      run: () => {
+        inTable();
+        tableKeys("v");
+        tableKeys("gl");
+        expectEq("still text", cellsSelected(), 0);
+        tableKeys("l");
+        expectEq("this cell", cellsSelected(), 1);
+        tableKeys("l");
+        expectEq("two cells", cellsSelected(), 2);
+        tableKeys("j");
+        expectEq("a block", cellsSelected(), 4);
+        tableKeys("<esc>");
+        expectEq("normal mode keeps the cells", cellsSelected(), 4);
+        tableKeys("l");
+        expectEq("a normal motion moves one cell", cellsSelected(), 1);
+        tableKeys("<esc>");
+        expectEq("esc goes back to text", cellsSelected(), 0);
+      },
+    },
+    {
+      name: "table: x selects rows, x again adds a row, and e and b walk through cells",
+      run: () => {
+        inTable();
+        tableKeys("x");
+        expectEq("one row", cellsSelected(), 3);
+        tableKeys("x");
+        expectEq("two rows", cellsSelected(), 6);
+        tableKeys("<esc>");
+        tableKeys("e");
+        tableKeys("e");
+        expectEq("next cell", cell()?.[1], 1);
+        tableKeys("b");
+        expectEq("previous cell", cell()?.[1], 0);
+      },
+    },
+    {
+      name: "table: the caret shows in insert mode in a cell, also with several cursors, and hides in normal mode",
+      run: () => {
+        const caret = (expr: string) => evalJs<string>(`JSON.stringify(getComputedStyle(app.workspace.activeLeaf.view.editor.${expr}.contentDOM).caretColor)`);
+        const cellCaret = () => caret("editorComponent.tableCell.editor.cm");
+        const hidden = "rgba(0, 0, 0, 0)";
+        inTable();
+        expectEq("normal mode in a cell", cellCaret(), hidden);
+        tableKeys("i");
+        expectTrue("insert mode in a cell", cellCaret() !== hidden);
+        expectEq("the note stays hidden", caret("cm"), hidden);
+        tableKeys("<esc>");
+        tableKeys("C");
+        tableKeys("i");
+        expectTrue("insert mode with several cursors", cellCaret() !== hidden);
+        tableKeys("<esc>");
+        tableKeys(",");
+      },
+    },
+    {
+      name: "table: a cursor in another cell sits and looks like the main one, in every state",
+      run: () => {
+        const place = (text: string) => {
+          setDoc(`#[a|]#bove\n\n| h | x |\n| -- | -- |\n| ${text} | 1 |\n| ${text} | 2 |\n\nbelow\n`);
+          Bun.sleepSync(500);
+          tableKeys("jjj");
+          tableKeys("C");
+        };
+        const boxes = () => evalJs<{ main: number[] | null; caret: number[]; other: number[]; others: number; sel: number[][] }>(`JSON.stringify((()=>{const c=app.workspace.activeLeaf.view.editor.editorComponent.tableCell;const t=c.table;const inCell=(r,base)=>[r.left-base.left,r.top-base.top,r.width,r.height].map(n=>Math.round(n*2)/2);const mine=c.cell.el.getBoundingClientRect();const next=t.rows[c.cell.row+1][c.cell.col].el.getBoundingClientRect();const v=c.editor.cm;const main=v.dom.querySelector(".hx-cursors .hx-cell");const other=[...document.querySelectorAll(".hx-cell-cursors .hx-cell")];const co=v.coordsAtPos(v.state.selection.main.head,1);return {main:main?inCell(main.getBoundingClientRect(),mine):null,caret:inCell(co,mine),other:other[0]?inCell(other[0].getBoundingClientRect(),next):[],others:other.length,sel:[...document.querySelectorAll(".hx-cell-selections .hx-cell")].map(e=>inCell(e.getBoundingClientRect(),next))}})())`);
+        const same = (what: string) => {
+          Bun.sleepSync(150);
+          const b = boxes();
+          expectEq(`${what}: one cursor in the other cell`, b.others, 1);
+          expectEq(`${what}: same place as the main cursor`, b.other, b.main);
+        };
+        place("asdf");
+        same("normal, first character");
+        tableKeys("l");
+        same("normal, second character");
+        tableKeys("gl");
+        same("normal, last character");
+        tableKeys("gh");
+        place("two words");
+        tableKeys("e");
+        same("after e");
+        expectEq("after e: the selection shows without the cursor's character", boxes().sel.length, 1);
+        place("");
+        same("normal, empty cell");
+        place("a **bold** end");
+        tableKeys("lll");
+        Bun.sleepSync(150);
+        expectEq("on hidden markup: the next letter shows on the block", evalJs(`JSON.stringify(document.querySelector(".hx-cell-cursors .hx-cell-glyph")?.textContent ?? "")`), "b");
+        place("asdf");
+        tableKeys("l");
+        tableKeys("i");
+        const before = boxes();
+        expectEq("insert: the cursor's character is not selected", before.sel, []);
+        expectEq("insert: the block starts at the caret", before.other[0], before.caret[0]);
+        tableKeys("<esc>");
+        tableKeys("a");
+        const after = boxes();
+        expectEq("append: the block starts at the caret", after.other[0], after.caret[0]);
+        expectEq("append: only the character before the cursor is selected", after.sel.length, 1);
+        expectEq("append: selection ends at the caret", (after.sel[0]?.[0] ?? 0) + (after.sel[0]?.[2] ?? 0), after.caret[0]);
+        tableKeys("<esc>");
+        tableKeys("A");
+        const end = boxes();
+        expectEq("A: the block sits after the last character", end.other[0], end.caret[0]);
+        tableKeys("<esc>");
+        tableKeys(",");
+        place("");
+        tableKeys("i");
+        const empty = boxes();
+        expectEq("insert in an empty cell", empty.other[0], empty.caret[0]);
+        tableKeys("x");
+        Bun.sleepSync(150);
+        const typed = boxes();
+        expectEq("typing moves both", typed.other[0], typed.caret[0]);
+        tableKeys("<esc>");
+        tableKeys(",");
+      },
+    },
+    {
+      name: "table: no cursor stays drawn after leaving the cells",
+      run: () => {
+        const left = () => evalJs<number>(`JSON.stringify(document.querySelectorAll(".hx-cell-cursors, .hx-cell-selections").length)`);
+        const start = () => {
+          inTable();
+          tableKeys("C");
+          expectEq("drawn", left(), 2);
+        };
+        for (const exit of ["ge", "gg", "%", ",", "<esc>,", ":<esc>", "/<esc>"]) {
+          start();
+          tableKeys(exit);
+          expectEq(`after ${exit}`, left(), 0);
+          tableKeys("<esc>");
+        }
+        start();
+        tableKeys("i");
+        const [x, y] = evalJs<[number, number]>(`JSON.stringify((()=>{const ed=app.workspace.activeLeaf.view.editor.cm;const r=ed.coordsAtPos(ed.state.doc.length-3);return [r.left+1,r.top+3]})())`);
+        mouse("mousePressed", x, y);
+        mouse("mouseReleased", x, y);
+        Bun.sleepSync(300);
+        expectEq("after a click below the table", left(), 0);
+        tableKeys("<esc>");
+        start();
+        evalJs(`JSON.stringify((app.workspace.activeLeaf.view.editor.cm.focus(), true))`);
+        Bun.sleepSync(300);
+        expectEq("after the focus moves to the note", left(), 0);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: after % and s, cursors in cells keep to the cells",
+      run: () => {
+        const cursors = () => evalJs<string[]>(`JSON.stringify((()=>{const v=app.workspace.activeLeaf.view.editor.cm;const d=v.state.doc;return v.state.selection.ranges.map(r=>{const c=r.head>r.anchor?r.head-1:r.head;return d.sliceString(c,c+1)})})())`);
+        const drawn = () => evalJs<number>(`JSON.stringify(document.querySelectorAll(".hx-cell-cursors .hx-cell").length)`);
+        const start = (doc: string) => {
+          setDoc(doc);
+          Bun.sleepSync(500);
+          tableKeys("%");
+          tableKeys("sneedle");
+          tableKeys("<ret>");
+        };
+        const mixed = "#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| x needle y | b |\n| c | needle |\n\nbelow needle end\n";
+        start(mixed);
+        expectEq("three matches", cursors(), ["e", "e", "e"]);
+        tableKeys("l");
+        expectEq("l: one goes to the space, one crosses nothing at the row's end, one stays in the text", drawn(), 2);
+        expectTrue("no cursor on a pipe", !cursors().includes("|"));
+        tableKeys("gl");
+        expectTrue("gl stays in the cells", !cursors().includes("|"));
+        expectEq("gl keeps all three", cursors().length, 3);
+        tableKeys("9e");
+        expectTrue("e never lands on a pipe", !cursors().includes("|"));
+        tableKeys("<esc>");
+        tableKeys(",");
+        tableKeys("<esc>");
+        start("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| needle a | needle b |\n\nbelow\n");
+        tableKeys("gl");
+        expectEq("two in one row stay two", cursors(), ["a", "b"]);
+        tableKeys("<esc>");
+        tableKeys(",");
+        tableKeys("<esc>");
+        start("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| needle a | b |\n| c | needle d |\n\nbelow\n");
+        tableKeys("gh");
+        tableKeys("fb");
+        expectEq("f does not reach into the next cell", cursors(), ["n", "n"]);
+        tableKeys("fa");
+        expectEq("f finds in its own cell", cursors(), ["a", "n"]);
+        tableKeys("9j");
+        expectEq("j stops at the last row", cursors().length, 2);
+        const lines = note().split("\n").length;
+        tableKeys("o");
+        expectEq("o is refused", note().split("\n").length, lines);
+        tableKeys("A");
+        tableKeys("Z");
+        tableKeys("<esc>");
+        expectTrue("A adds at the end of each cell", note().includes("needle aZ") && note().includes("needle dZ"));
+        tableKeys(",");
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: a cursor in a cell acts the same alone, with C and after % and s",
+      run: () => {
+        const text = 'foo (bar "baz" qux) end-of word';
+        const doc = `#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| ${text} | 1 |\n| ${text} | 2 |\n\nbelow\n`;
+        const steps = ["e", "e", "b", "l", "h", "2e", "3l", "gl", "gh", "gs", "f(", "t)", "T(", "F(", "mi(", 'mi"', 'ma"', "miw", "maw", "mm", "mi|", ";", "<A-;>", "gh", "v", "e", "b", "gl", "gh", "fq", "<esc>", "gh", "w", "W", "E", "B", "<A-e>", "<A-b>", "gh", "e", "<A-o>", "<A-o>", "<A-i>", "<A-n>", "<A-p>", "<esc>", "gh", "5l", "e", "d", "gl", "d", "b", "~", "gh", "rZ", "ge"];
+        const read = (mode: string) => evalJs<unknown>(`JSON.stringify((()=>{const ed=app.workspace.activeLeaf.view.editor;const c=ed.editorComponent.tableCell;if("${mode}"!=="note"){return [c.editor.cm.state.doc.toString(),c.editor.cm.state.selection.ranges.map(r=>[r.anchor,r.head])]}const t=document.querySelector(".cm-table-widget").cmTile.widget;const {start,end,textStart,textEnd}=t.rows[1][0].getAbsoluteOffsets();return [ed.cm.state.sliceDoc(textStart,textEnd),ed.cm.state.selection.ranges.filter(r=>r.from>=start&&r.from<end).map(r=>[Math.min(r.anchor,textEnd)-textStart,Math.min(r.head,textEnd)-textStart])]})())`);
+        const run = (mode: string): string[] => {
+          setDoc(doc);
+          Bun.sleepSync(500);
+          if (mode === "note") {
+            tableKeys("%");
+          } else {
+            tableKeys("jjj");
+            if (mode === "cursors") tableKeys("C");
+            tableKeys("mi|");
+          }
+          tableKeys("sfoo");
+          tableKeys("<ret>");
+          const out: string[] = [];
+          for (const step of steps.filter((k) => k !== "ge")) {
+            tableKeys(step);
+            out.push(`${step}=${JSON.stringify(read(mode))}`);
+          }
+          tableKeys("<esc>");
+          tableKeys(",");
+          tableKeys("<esc>");
+          return out;
+        };
+        const alone = run("alone");
+        for (const mode of ["cursors", "note"]) {
+          const got = run(mode);
+          const wrong = got.filter((g, i) => g !== alone[i]).map((g) => `${g} (alone ${alone[got.indexOf(g)]})`);
+          expectEq(`${mode} differs`, wrong, []);
+        }
+      },
+    },
+    {
+      name: "table: edits after % and s cannot break a row",
+      run: () => {
+        const doc = "#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| needle | b |\n| c | needle |\n\nbelow needle\n";
+        const start = () => {
+          setDoc(doc);
+          Bun.sleepSync(500);
+          tableKeys("%");
+          tableKeys("sneedle");
+          tableKeys("<ret>");
+        };
+        const finish = () => {
+          tableKeys("<esc>");
+          tableKeys(",");
+          tableKeys("<esc>");
+        };
+        start();
+        tableKeys("cA|B");
+        tableKeys("<esc>");
+        expectEq("a typed pipe is escaped in cells only", note(), "above\n\n| h1 | h2 |\n| -- | -- |\n| A\\|B | b |\n| c | A\\|B |\n\nbelow A|B\n");
+        finish();
+        setDoc(doc);
+        Bun.sleepSync(500);
+        tableKeys("%");
+        tableKeys("y");
+        tableKeys("sneedle");
+        tableKeys("<ret>");
+        tableKeys("R");
+        expectEq("several lines into a cell is refused", note(), doc.replace("#[a|]#", "a"));
+        finish();
+        start();
+        tableKeys("<gt>");
+        expectEq("indent is refused", note(), doc.replace("#[a|]#", "a"));
+        finish();
+        setDoc(doc);
+        Bun.sleepSync(500);
+        tableKeys("%");
+        tableKeys("s(dle \\| b|needle$)");
+        tableKeys("<ret>");
+        tableKeys("d");
+        expectEq("deleting across a cell's edge is refused", note().includes("| -- |\n| nee"), true);
+        finish();
+        start();
+        const marked = () => evalJs<number>(`JSON.stringify(document.querySelectorAll(".hx-row-selected").length)`);
+        tableKeys("x");
+        expectEq("x marks both rows", marked(), 4);
+        expectEq("x: rows are not shaded twice", evalJs(`JSON.stringify(document.querySelectorAll(".hx-cell-selections .hx-cell").length)`), 0);
+        expectEq("x: each row shows its cursor at the row's end", evalJs(`JSON.stringify(document.querySelectorAll(".hx-cell-cursors .hx-cell").length)`), 2);
+        expectEq("x: nothing is drawn for the hidden rows", evalJs(`JSON.stringify([...app.workspace.activeLeaf.view.editor.cm.dom.querySelectorAll(":scope > .cm-scroller > .hx-cursors > .hx-cell")].length)`), 1);
+        tableKeys("d");
+        expectEq("x then d removes the rows", note().includes("| c |"), false);
+        finish();
+        start();
+        tableKeys("C");
+        expectTrue("C adds in the same column", !note().includes("#"));
+        expectEq("C: one more in the table", evalJs(`JSON.stringify(app.workspace.activeLeaf.view.editor.cm.state.selection.ranges.length)`), 4);
+        finish();
+        const long = "word ".repeat(120).trim();
+        setDoc(`#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| needle | b |\n\nneedle ${long}\nnext\n`);
+        Bun.sleepSync(500);
+        tableKeys("%");
+        tableKeys("sneedle");
+        tableKeys("<ret>");
+        const line = () => evalJs<number>(`JSON.stringify((()=>{const v=app.workspace.activeLeaf.view.editor.cm;const r=v.state.selection.ranges[v.state.selection.ranges.length-1];return v.state.doc.lineAt(r.head).number})())`);
+        const before = line();
+        tableKeys("j");
+        expectEq("j moves one visual row outside the table", line(), before);
+        finish();
+      },
+    },
+    {
+      name: "table: an input method types in every cursor, with C and after % and s",
+      run: () => {
+        const compose = (text: string) => {
+          sendDomKey(domKey("a", { key: "Process", code: "KeyA", keyCode: 229 } as never));
+          Bun.sleepSync(80);
+          ob("dev:cdp", "method=Input.imeSetComposition", `params=${JSON.stringify({ text: "k", selectionStart: 1, selectionEnd: 1 })}`);
+          ob("dev:cdp", "method=Input.insertText", `params=${JSON.stringify({ text })}`);
+          Bun.sleepSync(200);
+        };
+        inTable();
+        tableKeys("C");
+        tableKeys("i");
+        compose("か");
+        tableKeys("<esc>");
+        expectEq("C: both cells", [note().includes("かh1"), note().includes("かa")], [true, true]);
+        tableKeys(",");
+        tableKeys("<esc>");
+        setDoc("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| needle | b |\n| c | needle |\n\nbelow\n");
+        Bun.sleepSync(500);
+        tableKeys("%");
+        tableKeys("sneedle");
+        tableKeys("<ret>");
+        tableKeys("c");
+        compose("か");
+        tableKeys("<esc>");
+        expectEq("% s: both matches", note().split("か").length, 3);
+        expectEq("nothing typed outside", note().includes("か\nbelow"), false);
+        tableKeys(",");
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: clicking a search result outside the table leaves the cell",
+      run: () => {
+        const md = `app.workspace.getLeavesOfType("markdown").find(l=>l.view.file?.path==="scratch.md")`;
+        setDoc("#[a|]#bove\n\n| h1 | h2 |\n| -- | -- |\n| x needle y | b |\n\nbelow needle\n");
+        Bun.sleepSync(400);
+        evalJs(`JSON.stringify((${md}.view.save(),true))`);
+        Bun.sleepSync(900);
+        evalJs(`JSON.stringify((app.internalPlugins.getPluginById("global-search").instance.openGlobalSearch("needle"),true))`);
+        Bun.sleepSync(2200);
+        const click = (i: number) => {
+          const [x, y] = evalJs<[number, number]>(`JSON.stringify((()=>{const b=[...document.querySelectorAll(".search-result-file-match")][${i}].getBoundingClientRect();return [b.left+b.width/2,b.top+b.height/2]})())`);
+          mouse("mousePressed", x, y);
+          Bun.sleepSync(60);
+          mouse("mouseReleased", x, y);
+          Bun.sleepSync(900);
+        };
+        const where = () => evalJs<[boolean, string]>(`JSON.stringify((()=>{const ed=${md}.view.editor;const m=ed.cm.state.selection.main;return [ed.activeCM!==ed.cm,ed.cm.state.sliceDoc(m.from,m.from+6)]})())`);
+        click(0);
+        expectEq("in the cell, on the match", where(), [true, "needle"]);
+        Bun.sleepSync(2500);
+        click(1);
+        expectEq("out of the cell, on the match", where(), [false, "needle"]);
+        Bun.sleepSync(2500);
+        click(0);
+        expectEq("back in the cell", where(), [true, "needle"]);
+        evalJs(`JSON.stringify((app.workspace.setActiveLeaf(${md},{focus:true}),true))`);
+        Bun.sleepSync(400);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: C adds a cursor in the row below, typing edits both cells",
+      run: () => {
+        inTable();
+        tableKeys("C");
+        expectEq("drawn in the other cell", evalJs(`JSON.stringify(document.querySelectorAll(".hx-cell-cursors .hx-cell").length)`), 1);
+        tableKeys("iZ");
+        tableKeys("<esc>");
+        expectEq("first cell", note().includes("Zh1"), true);
+        expectEq("second cell", note().includes("Za"), true);
+        tableKeys(",");
+        expectEq("back to one cursor", evalJs(`JSON.stringify(document.querySelectorAll(".hx-cell-cursors .hx-cell").length)`), 0);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: C then j moves both cursors, and mi| selects text in each",
+      run: () => {
+        inTable();
+        tableKeys("C");
+        tableKeys("mi|");
+        tableKeys("d");
+        expectEq("both emptied", [note().includes("h1"), note().includes("| a ")], [false, false]);
+        tableKeys("u");
+        tableKeys(",");
+      },
+    },
+    {
+      name: "table: a block of cells, i types in all of them",
+      run: () => {
+        inTable();
+        tableKeys("v");
+        tableKeys("gll");
+        tableKeys("j");
+        tableKeys("<esc>");
+        expectEq("two cells", cellsSelected(), 2);
+        tableKeys("c");
+        Bun.sleepSync(250);
+        tableKeys("Q");
+        tableKeys("<esc>");
+        expectEq("both changed", note().split("\n").filter((l) => l.startsWith("| Q")).length, 2);
+        tableKeys(",");
+      },
+    },
+    {
+      name: "table: select mode from above runs over rows, and a selection from outside marks them",
+      run: () => {
+        setDoc(TABLE);
+        Bun.sleepSync(500);
+        tableKeys("v");
+        tableKeys("j");
+        tableKeys("j");
+        expectEq("not in a cell", cell(), null);
+        expectEq("marked", (evalJs(`JSON.stringify(document.querySelectorAll(".hx-row-selected").length)`) as number) >= 3, true);
+        tableKeys("<esc>;");
+      },
+    },
+    {
+      name: "helix.toml binds an Obsidian command by its id",
+      run: () => {
+        setDoc("#[a|]#bc\n");
+        Bun.sleepSync(300);
+        const helix = `app.plugins.plugins["helix-motions"]`;
+        evalJs(`JSON.stringify((()=>{const p=${helix};const h=p.helix;h.keymaps=p.keymapsFor({normal:{name:"",map:{"X":"editor:toggle-bold"}}});return 1})())`);
+        tableKeys("X");
+        Bun.sleepSync(250);
+        expectEq("ran", note().includes("**"), true);
+        evalJs(`JSON.stringify((()=>{const p=${helix};p.reloadConfig();return 1})())`);
+        Bun.sleepSync(250);
+      },
+    },
+    {
+      name: "table: messages, prompts and key help show in the note's panel, not in the cell",
+      run: () => {
+        inTable();
+        tableKeys(":echo hello<ret>");
+        const shown = () => evalJs<{ cell: number; main: string | null }>(`JSON.stringify((()=>{const v=app.workspace.activeLeaf.view.editor.cm;const widget=v.contentDOM.querySelector(".cm-table-widget");return {cell:widget.querySelectorAll(".hx-panel > :not(.hx-hidden)").length,main:[...v.dom.querySelectorAll(":scope > .cm-panels .hx-panel > :not(.hx-hidden)")].map(e=>e.textContent).join("|")}})())`);
+        expectEq("message", shown(), { cell: 0, main: "hello" });
+        expectEq("still in the cell", cell()?.slice(0, 2), [0, 0]);
+        tableKeys(":");
+        expectEq("prompt", shown().cell, 0);
+        expectEq("prompt in the note", shown().main?.includes(":"), true);
+        tableKeys("<esc>");
+        tableKeys("g");
+        expectEq("key help", shown().cell, 0);
+        expectEq("key help in the note", (shown().main ?? "").length > 0, true);
+        tableKeys("<esc>");
+      },
+    },
+    {
+      name: "table: gg and % from a cell act on the note",
+      run: () => {
+        inTable();
+        tableKeys("j");
+        tableKeys("gg");
+        expectEq("left the table", cell(), null);
+        expectEq("first line", cursorLine(), 1);
+        tableKeys("jj");
+        tableKeys("%");
+        const s = state();
+        expectEq("whole note", s.ranges[0]?.[1], (s as unknown as { text: string }).text.length);
+        tableKeys(";");
+      },
+    },
+    {
+      name: "table: a macro replays across cells",
+      run: () => {
+        inTable();
+        tableKeys("QiX<esc>glllQ".replace("gl", ""));
+        expectEq("recorded", note().includes("Xh1"), true);
+        tableKeys("q");
+        expectEq("replayed in the next cell", note().includes("Xh2"), true);
+      },
+    },
+  ];
 }
 
 const checks: Check[] = [
@@ -480,12 +1314,12 @@ const checks: Check[] = [
     },
   },
   {
-    name: "unsupported Helix commands report status instead of crashing",
+    name: "shell commands say there is no shell instead of crashing",
     run: () => {
       setDoc("#[x|]#\n");
-      keys("|");
+      keys("|ls<ret>");
       const s = state();
-      expectTrue("status set", !!s.status && /not available/.test(s.status.message), JSON.stringify(s.status));
+      expectTrue("status set", !!s.status && /No shell set/.test(s.status.message), JSON.stringify(s.status));
     },
   },
   {
@@ -517,16 +1351,33 @@ const checks: Check[] = [
       evalJs(`JSON.stringify((app.setting.open(), app.setting.openTabById("helix-motions"), 1))`);
       Bun.sleepSync(500);
       try {
-        const result = evalJs<{ text: string; status: string | null; warnings: number }>(
-          `JSON.stringify((()=>{const p=app.plugins.plugins["helix-motions"]; const v=p.configView; const host=p.hostForView(v); p.helix.feedKeys(host, "ggx"); const sel=v.state.selection.main; const text=v.state.sliceDoc(sel.from, sel.to); p.helix.feedKeys(host, "<esc>:w<ret>"); return {text, status: null, warnings: p.configWarnings.length}})())`,
+        const result = evalJs<{ text: string; ranges: number; status: string | null; warnings: number }>(
+          `JSON.stringify((()=>{const p=app.plugins.plugins["helix-motions"]; const v=p.configView; const host=p.hostForView(v); p.helix.feedKeys(host, "ggx"); const sel=v.state.selection.main; const text=v.state.sliceDoc(sel.from, sel.to); p.helix.feedKeys(host, "C"); const ranges=v.state.selection.ranges.length; p.helix.feedKeys(host, ",<esc>:w<ret>"); return {text, ranges, status: null, warnings: p.configWarnings.length}})())`,
         );
         expectEq("x selects the first line", result.text, "[editor]\n");
+        expectEq("C adds a selection", result.ranges, 2);
         Bun.sleepSync(300);
         expectEq("saved", evalJs(`JSON.stringify(app.plugins.plugins["helix-motions"].helix.status?.message ?? null)`), "helix.toml saved");
       } finally {
         evalJs(`JSON.stringify((app.setting.close(), 1))`);
         openScratch();
       }
+    },
+  },
+  {
+    name: "unbound Ctrl with Home, End or Page goes to Obsidian and macOS in normal mode, Ctrl-k does not edit",
+    run: () => {
+      setDoc("#[h|]#ello world\n");
+      evalJs(`JSON.stringify((window.hxLastKey=null, window.hxKeyProbe||(window.hxKeyProbe=(e)=>{window.hxLastKey={key:e.key,prevented:e.defaultPrevented}}, window.addEventListener("keydown", window.hxKeyProbe)), 1))`);
+      for (const k of ["C-home", "C-S-pagedown", "C-end"]) {
+        sendDomKey(domKey(k));
+        const got = evalJs<{ prevented: boolean } | null>(`JSON.stringify(window.hxLastKey)`);
+        expectEq(`${k} not prevented`, got?.prevented, false);
+      }
+      expectEq("selection unchanged", state().markup, "#[h|]#ello world\n");
+      sendDomKey(domKey("C-k"));
+      expectEq("Ctrl-k changes nothing", state().markup, "#[h|]#ello world\n");
+      evalJs(`JSON.stringify((window.removeEventListener("keydown", window.hxKeyProbe), window.hxKeyProbe=null, 1))`);
     },
   },
   {
@@ -579,6 +1430,87 @@ const checks: Check[] = [
       }
     },
   },
+
+  {
+    name: "the cursor stays on the text when a list line reveals its markup",
+    run: () => {
+      const long = "- [ ] on a no-selection (so just one cell in normal mode), a for some reason draws a selection when beginning to write";
+      setDoc(`#[I|]#ntro\n\n- [ ] short\n${long}\n\nend\n`);
+      Bun.sleepSync(300);
+      keys("jjmip");
+      let got: unknown = false;
+      for (let i = 0; i < 30 && got !== true; i++) {
+        Bun.sleepSync(100);
+        got = dom(`const line = v.state.doc.line(4); const c = v.dom.querySelector(".hx-cursors .hx-cell").getBoundingClientRect(); const co = v.coordsAtPos(line.to, -1); return Math.abs(c.left - co.right) < 1.5`);
+      }
+      expectEq("cell at the line end", got, true);
+    },
+  },
+  {
+    name: "clicking away from a selection returns its lines to Live Preview",
+    run: () => {
+      setDoc("#[I|]#ntro\n\n- [ ] one\n- [ ] two\n\nAfter text\n");
+      Bun.sleepSync(400);
+      keys("jjmip");
+      Bun.sleepSync(400);
+      const raw = () => dom(`return v.contentDOM.querySelectorAll(".cm-formatting-task").length`) as number;
+      expectEq("revealed", raw(), 2);
+      const p = dom(`const c = v.coordsAtPos(v.state.doc.line(6).from + 3, 1); return [c.left + 1, (c.top + c.bottom) / 2]`) as [number, number];
+      mouse("mouseMoved", p[0], p[1]);
+      mouse("mousePressed", p[0], p[1]);
+      mouse("mouseReleased", p[0], p[1]);
+      Bun.sleepSync(400);
+      expectEq("hidden again", raw(), 0);
+    },
+  },
+  {
+    name: "x then P on a last line with no newline pastes a whole line above",
+    run: () => {
+      setDoc("one\n#[t|]#wo");
+      keys("xyP");
+      expectEq("text", (state() as unknown as { text: string }).text, "one\ntwo\ntwo");
+    },
+  },
+  {
+    name: "p of a whole line after a last line with no newline adds a line",
+    run: () => {
+      setDoc("#[o|]#ne\ntwo");
+      keys("xyjp");
+      expectEq("text", (state() as unknown as { text: string }).text, "one\ntwo\none");
+    },
+  },
+  {
+    name: "Live Preview: motions skip frontmatter, gg goes to the first text line, k focuses the properties",
+    run: () => {
+      setDoc("---\nkey: value\n---\nfirst\n#[s|]#econd\n");
+      Bun.sleepSync(500);
+      expectEq("starts on second", cursorLine(), 5);
+      keys("k");
+      Bun.sleepSync(200);
+      expectEq("cursor on first", cursorLine(), 4);
+      keys("j");
+      keys("gg");
+      expectEq("gg", cursorLine(), 4);
+      keys("k");
+      Bun.sleepSync(150);
+      expectEq("properties have focus", evalJs(`app.workspace.activeLeaf.view.metadataEditor.hasFocus()`), true);
+      evalJs(`(app.workspace.activeLeaf.view.editor.cm.focus(), 1)`);
+    },
+  },
+  {
+    name: "Live Preview: j and k land on an embed line instead of skipping it",
+    run: () => {
+      setDoc("#[a|]#bove\n\n![[Welcome]]\n\nbelow\n");
+      Bun.sleepSync(700);
+      keys("jj");
+      expectEq("on the embed", cursorLine(), 3);
+      keys("jj");
+      expectEq("below", cursorLine(), 5);
+      keys("kk");
+      expectEq("back on the embed", cursorLine(), 3);
+    },
+  },
+  ...tableScenarios(),
 ];
 
 openScratch();

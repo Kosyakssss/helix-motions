@@ -194,6 +194,7 @@ Every `extend_*` command is the select-mode twin of a `move_*` or `goto_*` comma
 | Multiple cursors drawing | adapt | Cursors are cells one row tall, drawn in a layer above the text, like a terminal cell; a corner is round only where no selection touches it. The primary selection is the native one; other selections are full-row rectangles under the text, plus a CSS highlight where the text has an opaque background (code). |
 | Sticky `Z` mode, `auto-info` popup | adapt | Small which-key panel in the editor. |
 | Status line | adapt | One Obsidian status bar item. See config. |
+| Keys the keymap does not bind | adapt | In normal and select mode Helix takes every key. Here a Cmd key, or Ctrl with Home, End, Page Up or Page Down (Globe+Ctrl+arrow on macOS), that the keymap does not bind goes to Obsidian and macOS when no key is pending, so Obsidian hotkeys and window tiling work. A Cmd key that `helix.toml` binds, such as `Meta-z = "undo"`, runs the Helix command. |
 
 ## Text objects (`mi`, `ma`)
 
@@ -267,7 +268,7 @@ Read with the same structure and defaults as Helix. Unknown or skipped keys log 
 
 | Key | Mark | Reason |
 | --- | --- | --- |
-| `[keys.normal]`, `[keys.select]`, `[keys.insert]` | port | Full syntax: command names, `":typed args"`, arrays, `@keys` macros, nested tables. |
+| `[keys.normal]`, `[keys.select]`, `[keys.insert]` | port | Obsidian command ids too (`docs/obsidian-commands.md`). Full syntax: command names, `":typed args"`, arrays, `@keys` macros, nested tables. |
 | Insert-mode key chords (`j` then `k` to exit) | port | First key waits. On any other key, insert both. |
 | `scrolloff` | adapt | CM6 scroll margins. |
 | `scroll-lines` | adapt | `zj`/`zk` step only. Mouse wheel stays native. |
@@ -318,6 +319,10 @@ Options that Helix does not have. They live in the plugin's settings tab, not in
 | Insert keys (Enter, Tab, Backspace) | Obsidian | Obsidian: list continuation, list indent, table cells. Helix: `insert_newline`, `smart_tab`, `delete_char_backward` ports. |
 | Read keys by position | On | Normal and select mode read keys by their US-layout position with non-Latin layouts. |
 
+## Tables in Live Preview
+
+See [tables.md](tables.md).
+
 ## Decisions
 
 1. Live Preview shows the markup inside every Helix selection in normal and select mode.
@@ -337,5 +342,5 @@ Known gaps:
 
 - `:tutor` shows "not available".
 - In insert mode, Live Preview shows markup only around the caret. Typing replaces a non-empty native selection, so the native selection must be a caret there.
-- `Cmd-Z` is Obsidian's own undo. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
+- `Cmd-Z` is Obsidian's own undo unless `helix.toml` binds `Meta-z`. `u`, `U`, `Alt-u`, `Alt-U`, `:earlier` and `:later` use the ported Helix history.
 - On a 20,000-line note one key costs about one Obsidian transaction (~25 ms on an M1 Air).

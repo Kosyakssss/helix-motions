@@ -21,17 +21,6 @@ const external = [
   "@lezer/lr",
 ];
 
-const treeSitter: import("bun").BunPlugin = {
-  name: "tree-sitter",
-  setup(builder) {
-    builder.onLoad({ filter: /\.wasm$/ }, async (args) => {
-      const bytes = await Bun.file(args.path).bytes();
-      const packed = Buffer.from(Bun.deflateSync(bytes, { level: 9 })).toString("base64");
-      return { contents: `export default ${JSON.stringify(packed)};`, loader: "js" };
-    });
-  },
-};
-
 async function build(): Promise<boolean> {
   mkdirSync(out, { recursive: true });
   const result = await Bun.build({
@@ -41,8 +30,7 @@ async function build(): Promise<boolean> {
     format: "cjs",
     target: "browser",
     external,
-    plugins: [treeSitter],
-    footer: `/*\n${["tree-sitter/NOTICE", "regex/NOTICE"].map((f) => readFileSync(resolve(root, f), "utf8").trimEnd()).join("\n\n")}\n*/`,
+    footer: `/*\n${["tree-sitter/NOTICE", "regex/NOTICE"].map((f) => readFileSync(resolve(root, "node_modules/helix-cm6", f), "utf8").trimEnd()).join("\n\n")}\n*/`,
     sourcemap: process.argv.includes("--watch") ? "inline" : "none",
     minify: false,
   });
