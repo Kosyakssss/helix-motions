@@ -397,5 +397,5 @@ body.hx-autoinfo-ui .hx-autoinfo {
 
 .markdown-source-view.mod-cm6 .cm-table-widget:not(.has-selection) .cm-line::selection,
 .markdown-source-view.mod-cm6 .cm-table-widget:not(.has-selection) .cm-line ::selection {
-  background-color: var(--hx-selection) !important;
+  background-color: var(--hx-selection);
 }

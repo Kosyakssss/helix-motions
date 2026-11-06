@@ -994,8 +994,9 @@ function noteCellsCommand(plugin: HookPlugin, name: string, cx: Context): boolea
     plugin.helix.setStatus("that would change the table's rows");
     return true;
   }
-  if (LINE_INSERTS[name]) {
-    moveCellRanges(plugin, cx, tables, LINE_INSERTS[name]!, null);
+  const lineInsert = LINE_INSERTS[name];
+  if (lineInsert) {
+    moveCellRanges(plugin, cx, tables, lineInsert, null);
     plugin.helix.runStatic(new Context(plugin.helix, cx.host, null, null), "insert_mode");
     return true;
   }
