@@ -18,7 +18,7 @@ More in [docs/screenshots](docs/screenshots), each in dark, light and both.
 3. Select **Browse**, then search for **Helix Motions**.
 4. Select **Install**, then **Enable**.
 
-Requires Obsidian 1.13 or later, on desktop.
+Requires Obsidian 1.15 or later, on desktop.
 
 To install manually, download `main.js`, `manifest.json` and `styles.css` from the latest release into `<vault>/.obsidian/plugins/helix-motions/`.
 
