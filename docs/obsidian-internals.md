@@ -20,6 +20,8 @@ After each update, Obsidian sets `text-indent` and `padding-inline-start` on lis
 
 When the cursor enters a line, Live Preview shows its markup, and the line can wrap differently. Checkboxes, bullets, math and embeds are `contenteditable=false` widgets. `aimAt` in helix-cm6's `src/movement.ts` hit-tests the goal column to find what was under it, and `restoreVisualRow` corrects the row after the rewrap.
 
+A selection that ends at the start of a line counts as touching that line, so Live Preview reveals its markup. Helix's `x` includes the line break, so helix-cm6's `toNative` ends the editor's selection before it.
+
 ## Editor suggest
 
 - `app.workspace.editorSuggest.currentSuggest` stays set after the popup closes. Use its `isOpen`.

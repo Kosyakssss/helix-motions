@@ -22,7 +22,11 @@ function consistent(s: AppState & { ranges: [number, number][] }): void {
   if (s.mode === "insert") return;
   const text = (s as unknown as { text: string }).text;
   const toUtf16 = (c: number) => [...text].slice(0, c).join("").length;
-  const want = s.ranges.map(([a, h]) => [toUtf16(a), toUtf16(h)]);
+  const want = s.ranges.map(([a, h]) => {
+    const end = Math.max(a, h);
+    const last = [...text][end - 1] === "\n" && end > Math.min(a, h) ? end - 1 : end;
+    return [toUtf16(Math.min(a, last)), toUtf16(Math.min(h, last))];
+  });
   expectEq("native selection mirrors Helix ranges", s.native, want);
 }
 
@@ -1354,7 +1358,7 @@ const checks: Check[] = [
         const result = evalJs<{ text: string; ranges: number; status: string | null; warnings: number }>(
           `JSON.stringify((()=>{const p=app.plugins.plugins["helix-motions"]; const v=p.configView; const host=p.hostForView(v); p.helix.feedKeys(host, "ggx"); const sel=v.state.selection.main; const text=v.state.sliceDoc(sel.from, sel.to); p.helix.feedKeys(host, "C"); const ranges=v.state.selection.ranges.length; p.helix.feedKeys(host, ",<esc>:w<ret>"); return {text, ranges, status: null, warnings: p.configWarnings.length}})())`,
         );
-        expectEq("x selects the first line", result.text, "[editor]\n");
+        expectEq("x selects the first line", result.text, "[editor]");
         expectEq("C adds a selection", result.ranges, 2);
         Bun.sleepSync(300);
         expectEq("saved", evalJs(`JSON.stringify(app.plugins.plugins["helix-motions"].helix.status?.message ?? null)`), "helix.toml saved");
@@ -1431,6 +1435,25 @@ const checks: Check[] = [
     },
   },
 
+  {
+    name: "x reveals only its own line and still takes the line break",
+    run: () => {
+      const raw = () => dom(`return [...v.contentDOM.querySelectorAll(".cm-line")].map((l) => l.textContent).filter((t) => t.startsWith("- [ ]"));`);
+      setDoc("- [ ] one\n- [ ] t#[w|]#o\n- [ ] three\n- [ ] four\n");
+      keys("x");
+      Bun.sleepSync(400);
+      expectEq("only the selected line shows its markup", raw(), ["- [ ] two"]);
+      evalJs(`(()=>{const cm=app.workspace.activeLeaf.view.editor.cm;cm.dispatch({selection:cm.state.selection});return 1})()`);
+      Bun.sleepSync(400);
+      expectEq("the same selection sent again changes nothing", state().markup, "- [ ] one\n#[- [ ] two\n|]#- [ ] three\n- [ ] four\n");
+      keys("<A-;>");
+      Bun.sleepSync(300);
+      expectTrue("a backward selection still paints its line break", Number(dom(`return v.dom.querySelectorAll(".hx-cell-sel").length;`)) >= 1);
+      keys("<A-;>");
+      keys("d");
+      expectEq("d takes the whole line", state().markup.replace(/#\[|\|\]#|\]#|#\[\|/g, ""), "- [ ] one\n- [ ] three\n- [ ] four\n");
+    },
+  },
   {
     name: "the cursor stays on the text when a list line reveals its markup",
     run: () => {

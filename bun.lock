@@ -14,7 +14,7 @@
         "eslint": "^10.13.0",
         "eslint-import-resolver-node": "^0.4.0",
         "eslint-plugin-obsidianmd": "^0.4.2",
-        "helix-cm6": "github:Kosyakssss/helix-cm6#dac8929ca90008f4b63fcd36624b8cd5486d87d2",
+        "helix-cm6": "github:Kosyakssss/helix-cm6#21dd29d9d9b57c9b728ff28df7f7d009534fdfcb",
         "obsidian": "^1.14.4",
         "smol-toml": "^1.9.1",
         "typescript": "^7",
@@ -357,7 +357,7 @@
 
     "hasown": ["hasown@2.0.4", "", { "dependencies": { "function-bind": "^1.1.2" } }, "sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A=="],
 
-    "helix-cm6": ["helix-cm6@github:Kosyakssss/helix-cm6#dac8929", { "dependencies": { "smol-toml": "1.9.1" }, "peerDependencies": { "@codemirror/commands": "^6.11.1", "@codemirror/state": "^6.7.6", "@codemirror/view": "^6.43.15" } }, "Kosyakssss-helix-cm6-dac8929", "sha512-cMlIpaxiOFMK5ZYQX72CC5MgUqkbxWY/IRuQxsn1KrhCaK5bkYxqj+kLjOEdRNRMycK4ju4c91PPK+Aai+uTZA=="],
+    "helix-cm6": ["helix-cm6@github:Kosyakssss/helix-cm6#21dd29d", { "dependencies": { "smol-toml": "1.9.1" }, "peerDependencies": { "@codemirror/commands": "^6.11.1", "@codemirror/state": "^6.7.6", "@codemirror/view": "^6.43.15" } }, "Kosyakssss-helix-cm6-21dd29d", "sha512-7Al2xREkuSwMseSnKdEYzMKPJTDOQpI7NkI9wl6xew0RFJf4Wf6EQJFx9d7OjbfCsx1HHWjEvbpOgl7y4AuzVw=="],
 
     "hookified": ["hookified@1.15.1", "", {}, "sha512-MvG/clsADq1GPM2KGo2nyfaWVyn9naPiXrqIe4jYjXNZQt238kWyOGrsyc/DmRAQ+Re6yeo6yX/yoNCG5KAEVg=="],
 
