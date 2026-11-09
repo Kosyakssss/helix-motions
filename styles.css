@@ -134,6 +134,16 @@ body.hx-status-font-ui .status-bar-item.hx-status {
   font-family: var(--font-interface);
 }
 
+body.hx-status-font-text .status-bar-item.hx-status,
+body.hx-status-font-ui .status-bar-item.hx-status {
+  font-variant-numeric: normal;
+}
+
+body.hx-status-font-text .hx-status-mode.hx-color,
+body.hx-status-font-ui .hx-status-mode.hx-color {
+  font-weight: inherit;
+}
+
 body.hx-autoinfo-left .hx-autoinfo {
   right: auto;
   left: 12px;
