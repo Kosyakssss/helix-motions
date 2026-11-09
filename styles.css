@@ -112,8 +112,7 @@ body.hx-status-tone .status-bar-item.hx-status {
 
 body.hx-status-tone .status-bar-item.hx-status,
 body.hx-mode-fill .status-bar-item.hx-status {
-  margin: calc(-1 * var(--hx-bar-pad-top, 0px)) 0 calc(-1 * var(--hx-bar-pad-bottom, 0px))
-    calc(-1 * var(--hx-bar-pad-left, 0px));
+  padding: 0;
 }
 
 body.hx-mode-fill .hx-status-item-mode {
@@ -170,7 +169,9 @@ body.hx-autoinfo-ui .hx-autoinfo {
   position: relative;
   align-self: stretch;
   gap: var(--hx-bar-gap, var(--size-2-2));
-  padding: 0;
+  margin: calc(-1 * var(--hx-bar-pad-top, 0px)) 0 calc(-1 * var(--hx-bar-pad-bottom, 0px))
+    calc(-1 * var(--hx-bar-pad-left, 0px));
+  padding: var(--hx-bar-pad-top, 0px) 0 var(--hx-bar-pad-bottom, 0px) var(--hx-bar-pad-left, 0px);
   background-color: transparent;
   border-radius: 0;
   border-top-left-radius: var(--hx-inner-radius);
