@@ -31,7 +31,7 @@ settings:
     default: hx-status-line
     options:
       -
-        label: Split by a line
+        label: On the status bar
         value: hx-status-line
       -
         label: On a lighter tone
@@ -92,7 +92,6 @@ body.hx-full-status-bar {
 
 body.hx-status-tone .status-bar-item.hx-status {
   background-color: var(--background-modifier-hover);
-  border-right: none;
 }
 
 body.hx-mode-fill .hx-status-mode.hx-color {
@@ -143,10 +142,6 @@ body.hx-autoinfo-ui .hx-autoinfo {
   border-top-left-radius: var(--hx-inner-radius);
   font-family: var(--font-monospace);
   white-space: pre;
-}
-
-.status-bar-item.hx-status:not(.hx-status-full) {
-  border-right: 1px solid var(--text-faint);
 }
 
 .status-bar-item.hx-status.hx-status-full {
