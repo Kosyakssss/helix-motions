@@ -27,4 +27,5 @@ With the [Style Settings](https://github.com/mgmeyers/obsidian-style-settings) p
 - The cursor's corner radius.
 - A full-width status bar.
 - How the Helix block and the mode look in the status bar.
+- The font of Helix's items in the status bar: monospace, text or interface.
 - The side and the font of the key help box.
