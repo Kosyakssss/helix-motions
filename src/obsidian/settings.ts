@@ -7,9 +7,10 @@ export interface Settings {
   autoPairs: "obsidian" | "helix";
   insertKeys: "obsidian" | "helix";
   physicalKeys: boolean;
+  enabled: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { autoPairs: "obsidian", insertKeys: "obsidian", physicalKeys: true };
+export const DEFAULT_SETTINGS: Settings = { autoPairs: "obsidian", insertKeys: "obsidian", physicalKeys: true, enabled: true };
 
 export interface SettingsHost extends Plugin {
   settings: Settings;

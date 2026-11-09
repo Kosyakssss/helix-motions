@@ -22,6 +22,7 @@ export default class HelixMotionsPlugin extends Plugin {
   private activeView: EditorView | null = null;
   configWarnings: string[] = [];
   editorExtension: Extension = [];
+  private activeExtensions: Extension[] = [];
   private configView: EditorView | null = null;
   private settingTab: HelixSettingTab | null = null;
   private syntaxSessions: SyntaxSessions | null = null;
@@ -157,9 +158,10 @@ export default class HelixMotionsPlugin extends Plugin {
         statusBar: (view) => view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar"),
       });
     this.editorExtension = [this.editorExtension, dropSelectionChange.of(isMarkupSnap), obsidianHooks(this)];
-    this.registerEditorExtension(this.editorExtension);
+    this.registerEditorExtension(this.activeExtensions);
     this.statusEl = this.addStatusBarItem();
     this.statusEl.addClass("hx-status");
+    this.applyEnabled();
     const bar = this.statusEl.parentElement;
     if (bar) {
       let width = bar.offsetWidth;
@@ -174,6 +176,7 @@ export default class HelixMotionsPlugin extends Plugin {
     this.settingTab = new HelixSettingTab(this.app, this);
     this.addSettingTab(this.settingTab);
     this.addCommand({ id: "reload-config", name: "Reload helix.toml", callback: () => void this.reloadConfig() });
+    this.addCommand({ id: "toggle", name: "Toggle on or off", callback: () => void this.toggleEnabled() });
     this.registerEvent(
       this.app.workspace.on("file-open", (file: TFile | null) => {
         const leaf = this.app.workspace.getMostRecentLeaf();
@@ -278,6 +281,28 @@ export default class HelixMotionsPlugin extends Plugin {
     if (this.statusEl) releaseBar(this.statusEl);
     this.statusEl?.remove();
     this.syntaxSessions?.clear();
+  }
+
+  private applyEnabled(): void {
+    this.activeExtensions.splice(0, this.activeExtensions.length, ...(this.settings.enabled ? [this.editorExtension] : []));
+    this.app.workspace.updateOptions();
+    this.statusEl.toggle(this.settings.enabled);
+    this.activeView = this.settings.enabled ? this.api.view() : null;
+    this.refreshStatus();
+  }
+
+  private async toggleEnabled(): Promise<void> {
+    endTableCursors();
+    this.helix.activePrompt = null;
+    this.helix.onNextKeyState = null;
+    this.helix.count = null;
+    this.helix.keymaps.reset();
+    this.helix.macroRecording = null;
+    this.helix.status = null;
+    this.helix.autoinfo = null;
+    this.settings.enabled = !this.settings.enabled;
+    this.applyEnabled();
+    await this.saveSettings();
   }
 
   baseConfig(): Config {

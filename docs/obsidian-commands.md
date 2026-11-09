@@ -442,3 +442,7 @@ The lists below come from Obsidian with all core plugins on: `bun scripts/obsidi
 | Command | What it does | Obsidian's default key |
 |---|---|---|
 | `zk-prefixer` | Unique note creator: Create new unique note |  |
+
+## Turn Helix on or off
+
+Open the **Command palette** and run **Helix Motions: Toggle on or off**. Editors go back to Obsidian's own keys, and the choice stays after a restart. Set a hotkey for it in **Settings → Hotkeys**, because Helix keys do not work while it is off.

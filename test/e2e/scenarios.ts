@@ -1102,6 +1102,24 @@ const checks: Check[] = [
     },
   },
   {
+    name: "the toggle command turns Helix off and back on",
+    run: () => {
+      setDoc("#[x|]#\n");
+      const toggle = () => evalJs("JSON.stringify(app.commands.executeCommandById('helix-motions:toggle'))");
+      const status = () => evalJs<string>("JSON.stringify(document.querySelector('.hx-status')?.innerText ?? '')");
+      toggle();
+      try {
+        expectEq("status hidden", status(), "");
+        keys("i");
+        expectTrue("i is typed as text", (dom("return v.state.doc.toString()") as string).includes("i"));
+      } finally {
+        toggle();
+      }
+      expectTrue("status back", status().includes("NOR"), status());
+      expectEq("back in normal mode", state().mode, "normal");
+    },
+  },
+  {
     name: "line numbers in config switch Obsidian's own line numbers",
     run: () => {
       const shown = () => evalJs<boolean>(`JSON.stringify(app.vault.getConfig("showLineNumber"))`);
