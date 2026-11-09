@@ -110,7 +110,6 @@ body.hx-status-tone .status-bar-item.hx-status {
   background-color: var(--background-modifier-hover);
 }
 
-body.hx-status-tone .status-bar-item.hx-status,
 body.hx-mode-fill .status-bar-item.hx-status {
   padding: 0;
 }
@@ -284,7 +283,7 @@ body.hx-autoinfo-ui .hx-autoinfo {
   display: flex;
   align-items: center;
   gap: var(--hx-bar-gap, var(--size-2-2));
-  padding: 0 var(--size-2-2);
+  padding: 0 0 0 var(--hx-bar-pad-left, 0px);
   background-color: var(--status-bar-background, var(--background-secondary));
   border-top: var(--hx-bar-border-width, 0px) solid var(--hx-bar-border-color, transparent);
   border-left: var(--hx-bar-border-left, 0px) solid var(--hx-bar-border-color, transparent);
