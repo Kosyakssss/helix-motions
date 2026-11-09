@@ -156,8 +156,8 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
   el.empty();
   const strip = el.createDiv({ cls: "hx-status-strip" });
   const pending = (editor.count !== null ? String(editor.count) : "") + editor.pendingDisplay();
-  if (pending) strip.createSpan({ text: pending, cls: "hx-status-pending" });
-  if (editor.macroRecording) strip.createSpan({ text: `[${editor.macroRecording.register}]`, cls: "hx-status-macro" });
+  if (pending) strip.createSpan({ text: pending, cls: "status-bar-item hx-status-pending" });
+  if (editor.macroRecording) strip.createSpan({ text: `[${editor.macroRecording.register}]`, cls: "status-bar-item hx-status-macro" });
   strip.toggleClass("hx-hidden", strip.childElementCount === 0);
   el.toggleClass("hx-status-strip-shown", !strip.hasClass("hx-hidden") && !el.hasClass("hx-status-full"));
   const groups: [string, string[]][] = [["left", sl.left], ["center", sl.center], ["right", sl.right]];
