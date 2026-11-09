@@ -28,27 +28,27 @@ settings:
     title: Helix block
     type: class-select
     allowEmpty: false
-    default: hx-status-tone
+    default: hx-status-line
     options:
-      -
-        label: On a lighter tone
-        value: hx-status-tone
       -
         label: Split by a line
         value: hx-status-line
+      -
+        label: On a lighter tone
+        value: hx-status-tone
   -
     id: hx-mode-look
     title: Mode with color-modes on
     type: class-select
     allowEmpty: false
-    default: hx-mode-fill
+    default: hx-mode-text
     options:
-      -
-        label: Filled block
-        value: hx-mode-fill
       -
         label: Colored text
         value: hx-mode-text
+      -
+        label: Filled block
+        value: hx-mode-fill
   -
     id: hx-autoinfo-heading
     title: Which-key box
@@ -90,19 +90,15 @@ body.hx-full-status-bar {
   --status-bar-border-width: 1px 0 0 0;
 }
 
-body.hx-status-line .status-bar-item.hx-status:not(.hx-status-full) {
-  background-color: transparent;
-  border-right: 1px solid var(--text-faint);
+body.hx-status-tone .status-bar-item.hx-status {
+  background-color: var(--background-modifier-hover);
+  border-right: none;
 }
 
-body.hx-status-line .status-bar-item.hx-status.hx-status-full {
-  background-color: transparent;
-}
-
-body.hx-mode-text .hx-status-mode.hx-color.hx-status-mode {
-  background-color: transparent;
-  color: var(--hx-mode-color);
-  font-weight: var(--font-bold);
+body.hx-mode-fill .hx-status-mode.hx-color {
+  background-color: var(--hx-mode-color);
+  color: var(--hx-mode-ink);
+  font-weight: inherit;
 }
 
 body.hx-autoinfo-left .hx-autoinfo {
@@ -139,14 +135,18 @@ body.hx-autoinfo-ui .hx-autoinfo {
   order: -1;
   position: relative;
   align-self: stretch;
-  margin: calc(-1 * var(--hx-bar-pad-top, 0px)) var(--size-4-2) calc(-1 * var(--hx-bar-pad-bottom, 0px))
+  margin: calc(-1 * var(--hx-bar-pad-top, 0px)) 0 calc(-1 * var(--hx-bar-pad-bottom, 0px))
     calc(-1 * var(--hx-bar-pad-left, 0px));
   padding: 0;
-  background-color: var(--background-modifier-hover);
+  background-color: transparent;
   border-radius: 0;
   border-top-left-radius: var(--hx-inner-radius);
   font-family: var(--font-monospace);
   white-space: pre;
+}
+
+.status-bar-item.hx-status:not(.hx-status-full) {
+  border-right: 1px solid var(--text-faint);
 }
 
 .status-bar-item.hx-status.hx-status-full {
@@ -167,10 +167,6 @@ body.hx-autoinfo-ui .hx-autoinfo {
   justify-self: end;
 }
 
-.hx-status-full > .hx-status-group:not(:empty) ~ .hx-status-group:not(:empty) {
-  border-left: none;
-}
-
 .hx-status-full .hx-status-strip {
   position: static;
   padding: 0;
@@ -189,10 +185,6 @@ body.hx-autoinfo-ui .hx-autoinfo {
 
 .hx-status-group:empty {
   display: none;
-}
-
-.hx-status-group:not(:empty) ~ .hx-status-group:not(:empty) {
-  border-left: 1px solid var(--text-faint);
 }
 
 .hx-status-group.hx-status-mode-first {
@@ -218,6 +210,8 @@ body.hx-autoinfo-ui .hx-autoinfo {
   display: flex;
   align-items: center;
   padding: 0 1ch;
+  color: var(--hx-mode-color);
+  font-weight: var(--font-bold);
 }
 
 .hx-status-strip.hx-hidden + .hx-status-group > .hx-status-item:first-child > .hx-status-mode.hx-color {
@@ -226,20 +220,17 @@ body.hx-autoinfo-ui .hx-autoinfo {
 
 .hx-status-mode.hx-color.hx-status-normal {
   --hx-mode-color: var(--hx-mode-normal);
-  background-color: var(--hx-mode-normal);
-  color: var(--hx-ink-normal);
+  --hx-mode-ink: var(--hx-ink-normal);
 }
 
 .hx-status-mode.hx-color.hx-status-insert {
   --hx-mode-color: var(--hx-mode-insert);
-  background-color: var(--hx-mode-insert);
-  color: var(--hx-ink-insert);
+  --hx-mode-ink: var(--hx-ink-insert);
 }
 
 .hx-status-mode.hx-color.hx-status-select {
   --hx-mode-color: var(--hx-mode-select);
-  background-color: var(--hx-mode-select);
-  color: var(--hx-ink-select);
+  --hx-mode-ink: var(--hx-ink-select);
 }
 
 .hx-status-file {
@@ -275,16 +266,8 @@ body.hx-autoinfo-ui .hx-autoinfo {
 }
 
 .status-bar.hx-bar-square,
-.hx-status.hx-status-strip-shown,
-.hx-status.hx-status-joined,
-.hx-status-joined > .hx-status-strip,
-.hx-status-joined > .hx-status-group > .hx-status-item > .hx-status-mode.hx-color {
+.hx-status.hx-status-strip-shown {
   border-top-left-radius: 0;
-}
-
-.status-bar.hx-bar-joined,
-.hx-status-joined > .hx-status-strip {
-  border-left-color: transparent;
 }
 
 .hx-status-macro {

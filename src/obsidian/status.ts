@@ -136,7 +136,7 @@ function inks(style: CSSStyleDeclaration): Record<string, string> {
 export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, view: MarkdownView | null): void {
   const sl = editor.config.statusline;
   const bar = el.parentElement;
-  const squared = el.hasClass("hx-status-joined") || el.querySelector(":scope > .hx-status-strip:not(.hx-hidden)") !== null;
+  const squared = el.querySelector(":scope > .hx-status-strip:not(.hx-hidden)") !== null;
   if (bar) {
     const style = getComputedStyle(bar);
     const full = bar.getBoundingClientRect().left < 1 || style.position === "static" || style.position === "relative";
@@ -177,17 +177,9 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
     box.toggleClass("hx-status-mode-first", block(box.firstElementChild));
     box.toggleClass("hx-status-mode-last", block(box.lastElementChild));
   }
-  syncBar(el);
-}
-
-export function syncBar(el: HTMLElement): void {
-  const bar = el.parentElement;
-  if (!bar) return;
-  const joined = el.hasClass("hx-status-joined");
-  bar.toggleClass("hx-bar-square", joined || el.hasClass("hx-status-strip-shown"));
-  bar.toggleClass("hx-bar-joined", joined);
+  bar?.toggleClass("hx-bar-square", el.hasClass("hx-status-strip-shown"));
 }
 
 export function releaseBar(el: HTMLElement): void {
-  el.parentElement?.removeClasses(["hx-bar-square", "hx-bar-joined"]);
+  el.parentElement?.removeClass("hx-bar-square");
 }

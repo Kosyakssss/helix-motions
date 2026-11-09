@@ -5,7 +5,7 @@ import { buildKeymaps, commitHistoryNow, dropSelectionChange, type Config, Conte
 import { runScopeHandlers } from "@codemirror/view";
 import { deleteCharBackward, insertNewlineAndIndent } from "@codemirror/commands";
 import { makeWorkspace, leafId } from "./obsidian/workspace";
-import { releaseBar, renderStatus, syncBar } from "./obsidian/status";
+import { releaseBar, renderStatus } from "./obsidian/status";
 import { commentTokensAt } from "./obsidian/comments";
 import { DEFAULT_SETTINGS, HelixSettingTab, type Settings } from "./obsidian/settings";
 import { isMarkupSnap } from "./obsidian/selection-snap";
@@ -155,12 +155,6 @@ export default class HelixMotionsPlugin extends Plugin {
         panelOwner: (view) => tableOwner(view),
         panelGuest: (view) => focusedCell(this, view),
         statusBar: (view) => view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar"),
-        joinStatus: (view, joined) => {
-          const el = view.dom.ownerDocument.querySelector<HTMLElement>(".status-bar .hx-status");
-          if (!el) return;
-          el.toggleClass("hx-status-joined", joined);
-          syncBar(el);
-        },
       });
     this.editorExtension = [this.editorExtension, dropSelectionChange.of(isMarkupSnap), obsidianHooks(this)];
     this.registerEditorExtension(this.editorExtension);
