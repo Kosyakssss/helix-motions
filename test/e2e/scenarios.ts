@@ -1120,6 +1120,22 @@ const checks: Check[] = [
     },
   },
   {
+    name: "a cursor on hidden markup draws no character over the text when the editor loses focus",
+    run: () => {
+      setDoc("#[#|]# Note\n\nText.\n");
+      const glyphs = () => dom("return v.dom.querySelectorAll('.hx-cursors .hx-cell-glyph').length");
+      Bun.sleepSync(200);
+      expectEq("drawn while focused", glyphs(), 1);
+      dom("v.contentDOM.blur(); return true");
+      Bun.sleepSync(300);
+      try {
+        expectEq("nothing drawn while hidden", glyphs(), 0);
+      } finally {
+        dom("v.focus(); return true");
+      }
+    },
+  },
+  {
     name: "line numbers in config switch Obsidian's own line numbers",
     run: () => {
       const shown = () => evalJs<boolean>(`JSON.stringify(app.vault.getConfig("showLineNumber"))`);
