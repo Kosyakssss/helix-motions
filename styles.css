@@ -50,6 +50,22 @@ settings:
         label: Filled block
         value: hx-mode-fill
   -
+    id: hx-status-font
+    title: Font
+    type: class-select
+    allowEmpty: false
+    default: hx-status-font-mono
+    options:
+      -
+        label: Monospace
+        value: hx-status-font-mono
+      -
+        label: Text
+        value: hx-status-font-text
+      -
+        label: Interface
+        value: hx-status-font-ui
+  -
     id: hx-autoinfo-heading
     title: Which-key box
     type: heading
@@ -98,6 +114,14 @@ body.hx-mode-fill .hx-status-mode.hx-color {
   background-color: var(--hx-mode-color);
   color: var(--hx-mode-ink);
   font-weight: inherit;
+}
+
+body.hx-status-font-text .status-bar-item.hx-status {
+  font-family: var(--font-text);
+}
+
+body.hx-status-font-ui .status-bar-item.hx-status {
+  font-family: var(--font-interface);
 }
 
 body.hx-autoinfo-left .hx-autoinfo {
