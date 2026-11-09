@@ -110,7 +110,18 @@ body.hx-status-tone .status-bar-item.hx-status {
   background-color: var(--background-modifier-hover);
 }
 
+body.hx-status-tone .status-bar-item.hx-status,
+body.hx-mode-fill .status-bar-item.hx-status {
+  margin: calc(-1 * var(--hx-bar-pad-top, 0px)) 0 calc(-1 * var(--hx-bar-pad-bottom, 0px))
+    calc(-1 * var(--hx-bar-pad-left, 0px));
+}
+
+body.hx-mode-fill .hx-status-item-mode {
+  padding: 0;
+}
+
 body.hx-mode-fill .hx-status-mode.hx-color {
+  padding: 0 1ch;
   background-color: var(--hx-mode-color);
   color: var(--hx-mode-ink);
   font-weight: inherit;
@@ -158,8 +169,7 @@ body.hx-autoinfo-ui .hx-autoinfo {
   order: -1;
   position: relative;
   align-self: stretch;
-  margin: calc(-1 * var(--hx-bar-pad-top, 0px)) 0 calc(-1 * var(--hx-bar-pad-bottom, 0px))
-    calc(-1 * var(--hx-bar-pad-left, 0px));
+  gap: var(--hx-bar-gap, var(--size-2-2));
   padding: 0;
   background-color: transparent;
   border-radius: 0;
@@ -198,20 +208,11 @@ body.hx-autoinfo-ui .hx-autoinfo {
   display: flex;
   align-self: stretch;
   align-items: stretch;
-  gap: 1ch;
-  padding: 0 1ch;
+  gap: var(--hx-bar-gap, var(--size-2-2));
 }
 
 .hx-status-group:empty {
   display: none;
-}
-
-.hx-status-group.hx-status-mode-first {
-  padding-left: 0;
-}
-
-.hx-status-group.hx-status-mode-last {
-  padding-right: 0;
 }
 
 .hx-status-item {
@@ -228,7 +229,6 @@ body.hx-autoinfo-ui .hx-autoinfo {
   align-self: stretch;
   display: flex;
   align-items: center;
-  padding: 0 1ch;
   color: var(--hx-mode-color);
   font-weight: var(--font-bold);
 }
@@ -272,8 +272,8 @@ body.hx-autoinfo-ui .hx-autoinfo {
   right: 100%;
   display: flex;
   align-items: center;
-  gap: 1ch;
-  padding: 0 1ch;
+  gap: var(--hx-bar-gap, var(--size-2-2));
+  padding: 0 var(--size-2-2);
   background-color: var(--status-bar-background, var(--background-secondary));
   border-top: var(--hx-bar-border-width, 0px) solid var(--hx-bar-border-color, transparent);
   border-left: var(--hx-bar-border-left, 0px) solid var(--hx-bar-border-color, transparent);

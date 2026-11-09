@@ -142,6 +142,7 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
     const full = bar.getBoundingClientRect().left < 1 || style.position === "static" || style.position === "relative";
     el.toggleClass("hx-status-full", full);
     el.setCssProps({
+      "--hx-bar-gap": style.columnGap,
       "--hx-bar-pad-top": style.paddingTop,
       "--hx-bar-pad-bottom": style.paddingBottom,
       "--hx-bar-pad-left": style.paddingLeft,
@@ -170,12 +171,10 @@ export function renderStatus(el: HTMLElement, editor: HelixEditor, host: Host, v
       }
       const parts = trim(element(name, editor, host, view));
       if (parts.length === 0) continue;
-      const item = box.createSpan({ cls: "hx-status-item" });
+      const coloredMode = parts.some((part) => part.cls?.includes("hx-color"));
+      const item = box.createSpan({ cls: `status-bar-item hx-status-item${coloredMode ? " hx-status-item-mode" : ""}` });
       for (const part of parts) item.createSpan({ text: part.text, cls: part.cls });
     }
-    const block = (item: Element | null) => item?.querySelector(":scope > .hx-status-mode.hx-color") != null;
-    box.toggleClass("hx-status-mode-first", block(box.firstElementChild));
-    box.toggleClass("hx-status-mode-last", block(box.lastElementChild));
   }
   bar?.toggleClass("hx-bar-square", el.hasClass("hx-status-strip-shown"));
 }
