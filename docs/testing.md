@@ -2,7 +2,7 @@
 
 ## Against real Helix
 
-The engine is [helix-cm6](https://github.com/Kosyakssss/helix-cm6). Its tests run about 44,000 key sequences in real Helix and in the headless engine and compare the results, and run the hand suite as real key events in a plain CodeMirror 6 editor. See its `docs/testing.md`.
+The engine is [helix-cm6](https://tangled.org/kote-pdj.bsky.social/helix-cm6). Its tests run about 44,000 key sequences in real Helix and in the headless engine and compare the results, and run the hand suite as real key events in a plain CodeMirror 6 editor. See its `docs/testing.md`.
 
 ## Inside Obsidian
 

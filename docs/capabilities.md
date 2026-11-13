@@ -12,7 +12,7 @@ Helix Motions makes no network requests, has no telemetry, and stays inside your
 
 ## WebAssembly
 
-`main.js` contains two compressed WebAssembly files from [helix-cm6](https://github.com/Kosyakssss/helix-cm6). Both are built from pinned sources and checked byte for byte in its CI.
+`main.js` contains two compressed WebAssembly files from [helix-cm6](https://tangled.org/kote-pdj.bsky.social/helix-cm6). Both are built from pinned sources and checked byte for byte in its CI.
 
 | File | Contents |
 | --- | --- |

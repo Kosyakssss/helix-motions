@@ -55,7 +55,7 @@ Helix's own commands keep their names. Any Obsidian command works too, by its id
 
 Helix Motions follows Helix at commit `ba40e54742`. Every Helix editing command is here. Commands that need a shell, a language server or a debugger are not, and show a message instead. [docs/scope.md](docs/scope.md) lists every command and option.
 
-The Helix engine is [helix-cm6](https://github.com/Kosyakssss/helix-cm6). About 44,000 key sequences run in real Helix and in the engine, and the text, the selections and the mode after each one must match exactly.
+The Helix engine is [helix-cm6](https://tangled.org/kote-pdj.bsky.social/helix-cm6). About 44,000 key sequences run in real Helix and in the engine, and the text, the selections and the mode after each one must match exactly.
 
 ## Develop
 

@@ -4,7 +4,7 @@
 
 This is a port. Behavior follows Helix at commit `ba40e54742`. If Helix does not have an editing command or an option, this plugin does not have it either. Obsidian's own commands can be bound in `helix.toml` as well: see `docs/obsidian-commands.md`. Where Obsidian needs a different answer (pickers, links, files), `docs/scope.md` says what and why.
 
-The Helix engine, its wasm modules and the comparison with real Helix live in [helix-cm6](https://github.com/Kosyakssss/helix-cm6). This repo has the Obsidian parts. Engine changes go to helix-cm6 first.
+The Helix engine, its wasm modules and the comparison with real Helix live in [helix-cm6](https://tangled.org/kote-pdj.bsky.social/helix-cm6). This repo has the Obsidian parts. Engine changes go to helix-cm6 first.
 
 ## Setup
 
@@ -29,4 +29,4 @@ See `docs/testing.md` for details.
 
 Send engine changes to helix-cm6, with a case in its `test/oracle/suites.ts`. Add a scenario to `test/e2e/scenarios.ts` for Obsidian behaviour. Keep `bun run check`, `bun run lint` and the e2e tests passing.
 
-To work on both repos, point the dependency at a local copy for a while: `bun add helix-cm6@file:../helix-cm6`. Do not commit that; commit the helix-cm6 commit it needs.
+To work on both repos, point the dependency at a local copy for a while: `bun add helix-cm6@file:../helix-cm6`. Do not commit that; pin the helix-cm6 version it needs.
