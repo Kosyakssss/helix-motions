@@ -23,4 +23,4 @@ The end of `main.js` has their licenses.
 
 ## Source
 
-`main.js` is this repo plus helix-cm6 at the commit pinned in `package.json`. `bun install` and `bun run build` rebuild it byte for byte. `bun run lint` checks both with `eslint-plugin-obsidianmd`.
+`main.js` is this repo plus helix-cm6 at the version pinned in `package.json`. `bun install` and `bun run build` rebuild it byte for byte. `bun run lint` checks both with `eslint-plugin-obsidianmd`.
