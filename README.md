@@ -53,7 +53,7 @@ Helix's own commands keep their names. Any Obsidian command works too, by its id
 
 ## Compatibility
 
-Helix Motions follows Helix at commit `ba40e54742`. Every Helix editing command is here. Commands that need a shell, a language server or a debugger are not, and show a message instead. [docs/scope.md](docs/scope.md) lists every command and option.
+Helix Motions follows Helix at commit `a714a818a3`. Every Helix editing command is here. Commands that need a shell, a language server or a debugger are not, and show a message instead. [docs/scope.md](docs/scope.md) lists every command and option.
 
 The Helix engine is [helix-cm6](https://tangled.org/kote-pdj.bsky.social/helix-cm6). About 44,000 key sequences run in real Helix and in the engine, and the text, the selections and the mode after each one must match exactly.
 
@@ -63,7 +63,7 @@ See [Contributing](CONTRIBUTING.md) and [Testing](docs/testing.md).
 
 ## Credits
 
-The Helix engine is ported from [Helix](https://github.com/helix-editor/helix) at commit `ba40e54742`, under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
+The Helix engine is ported from [Helix](https://github.com/helix-editor/helix) at commit `a714a818a3`, under the Mozilla Public License 2.0, including the injection layers of [tree-house](https://github.com/helix-editor/tree-house). Syntax trees come from [tree-sitter](https://github.com/tree-sitter/tree-sitter) and [tree-sitter-markdown](https://github.com/tree-sitter-grammars/tree-sitter-markdown) (MIT). The way to end IME composition in normal mode comes from [codemirror-vim](https://github.com/replit/codemirror-vim).
 
 ## License
 
