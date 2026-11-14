@@ -2,7 +2,7 @@
 
 ## Rule
 
-This is a port. Behavior follows Helix at commit `ba40e54742`. If Helix does not have an editing command or an option, this plugin does not have it either. Obsidian's own commands can be bound in `helix.toml` as well: see `docs/obsidian-commands.md`. Where Obsidian needs a different answer (pickers, links, files), `docs/scope.md` says what and why.
+This is a port. Behavior follows Helix at commit `a714a818a3`. If Helix does not have an editing command or an option, this plugin does not have it either. Obsidian's own commands can be bound in `helix.toml` as well: see `docs/obsidian-commands.md`. Where Obsidian needs a different answer (pickers, links, files), `docs/scope.md` says what and why.
 
 The Helix engine, its wasm modules and the comparison with real Helix live in [helix-cm6](https://tangled.org/kote-pdj.bsky.social/helix-cm6). This repo has the Obsidian parts. Engine changes go to helix-cm6 first.
 

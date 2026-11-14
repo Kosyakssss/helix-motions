@@ -1,6 +1,6 @@
 # Scope
 
-Source: `helix-editor/helix` master `ba40e54742`, files `book/src/generated/static-cmd.md`, `book/src/generated/typable-cmd.md`, `book/src/editor.md`, `helix-term/src/keymap/default.rs`.
+Source: `helix-editor/helix` master `a714a818a3`, files `book/src/generated/static-cmd.md`, `book/src/generated/typable-cmd.md`, `book/src/editor.md`, `helix-term/src/keymap/default.rs`.
 
 Marks:
 

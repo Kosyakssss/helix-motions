@@ -16,7 +16,7 @@ import {
 } from "obsidian";
 import type { Text } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, pushJump, Range, Selection, selOf, setSel, type HelixApp } from "helix-cm6/engine";
+import { charAt, charBefore, type Context, docOf, gotoLineWithoutJumplist, type Jump, jumpSelection, pushJump, Range, Selection, selOf, setSel, type HelixApp } from "helix-cm6/engine";
 
 interface PluginLike {
   app: App;
@@ -659,7 +659,7 @@ export function makeWorkspace(plugin: PluginLike): HelixApp {
           (v.editor as unknown as { cm: EditorView }).cm,
         );
         const ncx = new (cx.constructor as new (...a: unknown[]) => Context)(cx.editor, host, null, null);
-        setSel(ncx, jump.selection);
+        setSel(ncx, jumpSelection(jump, host));
       });
     },
   };
