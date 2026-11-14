@@ -8,11 +8,9 @@ function safe(arg: string): string {
 
 export function ob(...args: string[]): string {
   args = args.map(safe);
-  for (let attempt = 0; attempt < 3; attempt++) {
-    const proc = Bun.spawnSync(["timeout", "-s", "KILL", "10", "obsidian", `vault=${VAULT}`, ...args], { stdout: "pipe", stderr: "pipe" });
-    const out = proc.stdout.toString().trim();
-    if (proc.exitCode === 0 || out !== "") return out;
-  }
+  const proc = Bun.spawnSync(["timeout", "-s", "KILL", "30", "obsidian", `vault=${VAULT}`, ...args], { stdout: "pipe", stderr: "pipe" });
+  const out = proc.stdout.toString().trim();
+  if (proc.exitCode === 0 || out !== "") return out;
   throw new Error(`obsidian CLI timed out: ${args.join(" ").slice(0, 200)}`);
 }
 
