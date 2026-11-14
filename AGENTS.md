@@ -47,7 +47,7 @@ Only the maintainer pushes, tags and releases.
 
 1. Pin helix-cm6 to an npm version whose CI passed. Bump `manifest.json` and add the version to `versions.json`. Commit with the version as the message, for example `0.1.7`.
 2. `git push origin main`. `origin` pushes to GitHub and Tangled.
-3. Write the release notes in a file: a short bullet list of user-visible changes since the previous version, then `**Full Changelog**: https://github.com/Kosyakssss/helix-motions/compare/<previous>...x.y.z`.
+3. Write the release notes in a file: a short bullet list of user-visible changes since the previous version. Only the bullets: no intro, no links, no **Full Changelog** line.
 4. When CI passes, make an annotated tag with the notes as its message: `git tag -a x.y.z --cleanup=verbatim -F <file>` (no `v` prefix), then `git push origin x.y.z`. Git keeps the notes, so GitHub and Tangled both show them. The Release workflow fails on a tag without notes, and uses the tag message as the GitHub release notes.
 5. When the Release workflow passes, check that the release has `main.js`, `manifest.json`, `styles.css` and the notes.
 
