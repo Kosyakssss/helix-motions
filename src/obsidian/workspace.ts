@@ -273,7 +273,7 @@ export function makeWorkspace(plugin: PluginLike): HelixApp {
           new ListModal(
             app,
             list.jumps.map((j) => ({
-              label: `${j.docId}: ${j.selection.primary().cursor(cx.host.state.doc)}`,
+              label: `${j.docId}: ${jumpSelection(j, cx.host).primary().cursor(cx.host.state.doc)}`,
               run: () => cx.editor.jumpTo(cx, j),
             })),
             "Jumplist",
